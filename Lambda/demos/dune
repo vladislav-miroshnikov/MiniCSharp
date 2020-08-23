@@ -1,0 +1,14 @@
+(env
+ (dev
+  (flags
+   (:standard -warn-error -A -w -26))))
+
+(executable
+ (name demoAO)
+ (modules demoAO)
+ (libraries Lambda.Lib))
+
+(executable
+ (name demoNO)
+ (modules demoNO)
+ (libraries Lambda.Lib))

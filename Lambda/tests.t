@@ -1,0 +1,20 @@
+Cram tests here
+https://dune.readthedocs.io/en/stable/tests.html#cram-tests
+
+  $ (cd ../../../default && demos/demoAO.exe)
+  Evaluating: (λ g y -> y)
+  Result:     (λ g y -> y)
+  (λ g y -> y)
+  Evaluating: (λ f x -> (f x))
+  Result:     (λ f x -> (f x))
+  (λ f x -> (f x))
+  Evaluating: ((λ m n f x -> (m (f (n (f x))))) ((λ f x -> (f x)) (λ f x -> (f x))))
+  Result:     (λ n f x _x -> ((f (n (f x))) _x))
+  (λ n f x _x -> ((f (n (f x))) _x))
+  Evaluating: ((λ n -> ((n (λ x x y -> y)) (λ x y -> x))) ((λ f x -> (f x)) ((λ f x -> (f (f x))) (λ f x -> (f (f (f x)))))))
+  Result:     (λ x y -> y)
+  (λ x y -> y)
+  $ (cd ../../../default && demos/demoNO.exe)
+  Evaluating: (((λ f -> ((λ x -> (f (x x))) (λ x -> (f (x x))))) (λ self N -> ((((λ n -> ((n (λ x x y -> y)) (λ x y -> x))) N) (λ f x -> (f x))) (((λ x y z -> (x (y z))) (self ((λ n f x -> (((n (λ g h -> (h (g f)))) (λ u -> x)) (λ u -> u))) N))) N)))) (λ f x -> (f (f (f x)))))
+  Result:     (λ z -> ((((λ x -> ((λ self N -> ((((λ n -> ((n (λ x x y -> y)) (λ x y -> x))) N) (λ f x -> (f x))) (((λ x y z -> (x (y z))) (self ((λ n f x -> (((n (λ g h -> (h (g f)))) (λ u -> x)) (λ u -> u))) N))) N))) (x x))) (λ x -> ((λ self N -> ((((λ n -> ((n (λ x x y -> y)) (λ x y -> x))) N) (λ f x -> (f x))) (((λ x y z -> (x (y z))) (self ((λ n f x -> (((n (λ g h -> (h (g f)))) (λ u -> x)) (λ u -> u))) N))) N))) (x x)))) ((λ n f x -> (((n (λ g h -> (h (g f)))) (λ u -> x)) (λ u -> u))) (λ f x -> (f (f (f x)))))) ((λ f x -> (f (f (f x)))) z)))
+  (λ z -> ((((λ x -> ((λ self N -> ((((λ n -> ((n (λ x x y -> y)) (λ x y -> x))) N) (λ f x -> (f x))) (((λ x y z -> (x (y z))) (self ((λ n f x -> (((n (λ g h -> (h (g f)))) (λ u -> x)) (λ u -> u))) N))) N))) (x x))) (λ x -> ((λ self N -> ((((λ n -> ((n (λ x x y -> y)) (λ x y -> x))) N) (λ f x -> (f x))) (((λ x y z -> (x (y z))) (self ((λ n f x -> (((n (λ g h -> (h (g f)))) (λ u -> x)) (λ u -> u))) N))) N))) (x x)))) ((λ n f x -> (((n (λ g h -> (h (g f)))) (λ u -> x)) (λ u -> u))) (λ f x -> (f (f (f x)))))) ((λ f x -> (f (f (f x)))) z)))
