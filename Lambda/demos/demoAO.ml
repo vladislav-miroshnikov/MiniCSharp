@@ -18,7 +18,7 @@ let ao_small_step_strat =
         | WIP f2 -> wip (app f2 arg)
         | Done (Abs (x, body)) -> (
             match helper arg with
-            | Done arg -> wip (subst (x, arg) body)
+            | Done arg -> wip (subst x ~by:arg body)
             | WIP arg -> wip (app f arg) )
         | Done f2 -> fin (App (f2, arg)) )
   in

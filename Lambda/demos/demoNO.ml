@@ -12,7 +12,7 @@ let nor_small_step_strat =
     | App (f, arg) -> (
         match helper f with
         | WIP f2 -> fin (app f2 arg)
-        | Done (Abs (x, e)) -> wip (subst (x, arg) e)
+        | Done (Abs (x, e)) -> wip (subst x ~by:arg e)
         | Done f2 -> fin (App (f2, arg)) )
   in
   let rec loop t =
