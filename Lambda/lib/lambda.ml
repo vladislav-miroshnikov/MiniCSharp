@@ -9,17 +9,6 @@ let abs x y = Abs (x, y)
 
 let app x y = App (x, y)
 
-let rec pp_lam fmt = function
-  | Var s -> Format.fprintf fmt "%s" s
-  | App (l, r) -> Format.fprintf fmt "(%a %a)" pp_lam l pp_lam r
-  | Abs (v1, Abs (v2, Abs (v3, Abs (v4, t)))) ->
-      Format.fprintf fmt "(λ %s %s %s %s -> %a)" v1 v2 v3 v4 pp_lam t
-  | Abs (v1, Abs (v2, Abs (v3, t))) ->
-      Format.fprintf fmt "(λ %s %s %s -> %a)" v1 v2 v3 pp_lam t
-  | Abs (v1, Abs (v2, t)) ->
-      Format.fprintf fmt "(λ %s %s -> %a)" v1 v2 pp_lam t
-  | Abs (x, t) -> Format.fprintf fmt "(λ %s -> %a)" x pp_lam t
-
 let list_remove x = List.filter (fun a -> a <> x)
 
 let free_vars =
@@ -32,12 +21,42 @@ let free_vars =
 
 let is_free_in x term = List.mem x (free_vars term)
 
-let replace_name x a t =
+let pp_lam =
+  let mangle t fmt x =
+    (* if is_free_in x t
+       then Format.fprintf fmt "_"
+       else *)
+    Format.fprintf fmt "%s" x
+  in
+  let rec pp fmt = function
+    | Var s -> Format.fprintf fmt "%s" s
+    | App (l, r) -> Format.fprintf fmt "(%a %a)" pp l pp r
+    | Abs (x, Abs (y, Var z)) when x = z && y <> z -> Format.fprintf fmt "⊤"
+    | Abs (x, Abs (y, Var z)) when y = z && x <> z -> Format.fprintf fmt "⊥"
+    | Abs (f, Abs (x, Var z)) when x = z && x <> f -> Format.fprintf fmt "0"
+    | Abs (f, Abs (x, App (Var g, Var z))) when x = z && x <> f && g = f ->
+        Format.fprintf fmt "1"
+    | Abs (f, Abs (x, App (Var g, App (Var h, Var z))))
+      when x = z && x <> f && g = f && h = g ->
+        Format.fprintf fmt "2"
+    | Abs (v1, Abs (v2, Abs (v3, Abs (v4, t)))) ->
+        Format.fprintf fmt "(λ %a %a %a %a -> %a)" (mangle t) v1 (mangle t) v2
+          (mangle t) v3 (mangle t) v4 pp t
+    | Abs (v1, Abs (v2, Abs (v3, t))) ->
+        Format.fprintf fmt "(λ %a %a %a -> %a)" (mangle t) v1 (mangle t) v2
+          (mangle t) v3 pp t
+    | Abs (v1, Abs (v2, t)) ->
+        Format.fprintf fmt "(λ %a %a -> %a)" (mangle t) v1 (mangle t) v2 pp t
+    | Abs (x, t) -> Format.fprintf fmt "(λ %a -> %a)" (mangle t) x pp t
+  in
+  pp
+
+let replace_name x ~by t =
   let rec helper = function
-    | Var y when x = y -> Var a
+    | Var y when x = y -> Var by
     | Var t -> Var t
     | App (l, r) -> App (helper l, helper r)
-    | Abs (y, t) when x = y -> Abs (a, helper t)
+    | Abs (y, t) when x = y -> Abs (by, helper t)
     | Abs (z, t) -> Abs (z, helper t)
   in
   helper t
@@ -51,11 +70,11 @@ let subst (x, v) =
     | Var y when y = x -> v
     | Var y -> Var y
     | App (l, r) -> App (helper l, helper r)
-    | Abs (y, b) when y == x -> Abs (y, b)
+    | Abs (y, b) when y = x -> Abs (y, b)
     | Abs (y, t) when is_free_in y v ->
         let frees = free_vars v @ free_vars t in
         let w = next_name y frees in
-        helper (Abs (w, replace_name y w t))
+        helper (Abs (w, replace_name y ~by:w t))
     | Abs (y, b) -> abs y (helper b)
   in
   helper
@@ -71,19 +90,19 @@ let apply_strat st = function
   | Abs (x, b) -> st.on_abs st x b
   | App (l, r) -> st.on_app st l r
 
-let no_strat =
-  let on_var _ name = Var name in
-  let on_abs _start name body = Abs (name, body) in
-  let on_app _start l r = App (l, r) in
+let without_strat =
+  let on_var _ = var in
+  let on_abs _ = abs in
+  let on_app _ = app in
   { on_var; on_abs; on_app }
 
 let cbn_strat =
   let on_app st f arg =
     match apply_strat st f with
-    | Abs (x, e) -> apply_strat st @@ subst (x, arg) e
+    | Abs (x, e) -> apply_strat st (subst (x, arg) e)
     | f2 -> App (f2, arg)
   in
-  { no_strat with on_app }
+  { without_strat with on_app }
 
 (* Normal Order Reduction to Normal Form
    Application function reduced as CBN first
@@ -98,7 +117,7 @@ let nor_strat =
         let arg2 = apply_strat st arg in
         App (f2, arg2)
   in
-  { no_strat with on_app; on_abs }
+  { without_strat with on_app; on_abs }
 
 (* Call-by-Value Reduction to Weak Normal Form *)
 let cbv_strat =
@@ -109,7 +128,7 @@ let cbv_strat =
         apply_strat st @@ subst (x, arg2) e
     | f2 -> App (f2, apply_strat st arg)
   in
-  { no_strat with on_app }
+  { without_strat with on_app }
 
 (* Applicative Order Reduction to Normal Form
    As CBV but reduce under on_abstractions *)
@@ -141,33 +160,33 @@ let cbn_big_step_strat =
   let on_var _st x = main (Var x) in
   { on_var; on_abs; on_app }
 
-let a = Var "a"
+let a = var "a"
 
-let x = Var "x"
+let x = var "x"
 
-let y = Var "y"
+let y = var "y"
 
-let z = Var "z"
+let z = var "z"
 
-let f = Var "f"
+let f = var "f"
 
-let g = Var "g"
+let g = var "g"
 
-let h = Var "h"
+let h = var "h"
 
-let m = Var "m"
+let m = var "m"
 
-let n = Var "n"
+let n = var "n"
 
-let p = Var "p"
+let p = var "p"
 
 let zero = abs "f" @@ abs "x" x
 
-let one = abs "f" @@ abs "x" @@ App (f, x)
+let one = abs "f" @@ abs "x" @@ app f x
 
-let two = abs "f" @@ abs "x" @@ App (f, App (f, x))
+let two = abs "f" @@ abs "x" @@ app f (app f x)
 
-let three = abs "f" @@ abs "x" @@ App (f, App (f, App (f, x)))
+let three = abs "f" @@ abs "x" @@ app f (app f (app f x))
 
 let test strat term =
   Format.printf "Evaluating: %a\n%!" pp_lam term;
