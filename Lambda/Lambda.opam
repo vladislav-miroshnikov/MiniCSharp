@@ -3,8 +3,8 @@ name: "REPLACE_BY_REAL_LANGUGE_NAME"
 version: "0.0.1"
 synopsis: """ What mini language are you implementing? """
 #description: """ """
-maintainer: "opensource@janestreet.com"
-#authors: "STUDENT NAME <STIDENT_EMAIL@domain.com>"
+maintainer: "STUDENT_EMAIL@domain.com"
+#authors: "STUDENT NAME <STUDENT_EMAIL@domain.com>"
 license: "LGPLv3"
 homepage: "not specified"
 #doc: "https://ocaml-ppx.github.io/ppxlib/"
@@ -13,7 +13,7 @@ depends: [
   "ocaml" {>= "4.04.1"}
   #"base"
   "ppx_expect"
-  "dune" #{>= "2.7"}
+  "dune" 
   "ocamlformat" { build }
 ]
 
