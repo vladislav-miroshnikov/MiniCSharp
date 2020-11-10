@@ -1,3 +1,10 @@
+(env
+ (_
+  (flags
+   (-strict-sequence -short-paths -strict-formats -short-paths -keep-locs -w
+     -3-9-32-58))))
+
+
 (executable
  (name REPL)
  (public_name Lambda.Repl)
