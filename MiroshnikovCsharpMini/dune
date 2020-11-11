@@ -2,7 +2,7 @@
  (name REPL)
  (public_name Lambda.Repl)
  (modules REPL)
- (libraries Lambda.Lib))
+ (libraries AST Parser))
 
 (cram
  (deps demos/demoAO.exe demos/demoNO.exe))
