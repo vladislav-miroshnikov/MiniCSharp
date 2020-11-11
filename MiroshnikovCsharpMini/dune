@@ -1,8 +1,5 @@
 (executable
  (name REPL)
- (public_name Lambda.Repl)
+ (public_name Csharp.Repl)
  (modules REPL)
  (libraries AST Parser))
-
-(cram
- (deps demos/demoAO.exe demos/demoNO.exe))

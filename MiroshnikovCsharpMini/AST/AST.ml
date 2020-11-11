@@ -7,31 +7,30 @@ module AST = struct
     | CsVVoid
     | CsVNull
     | CsVChar of char
-    | CsVString
+    | CsVString of string (*?*)
     | CsVRef
 
   type csModifier = Public | Static | Override | Const
 
   type csVariable = {
-    modifiers : csModifier list;
+    varModifiers : csModifier list;
     varType : csType;
     varName : string;
-    value : csValue option;
+    varValue : csValue option;
   }
 
   type csException = { excep : csType; excepMessage : string }
 
   type csExpr =
-    | DeclareExpr
-    | NumExpr
-    | LogicExpr
-    | CompareExpr
-    | CallMethod of { name : string; args : csExpr list }
+    | DeclareExpr of csDeclareExpr
+    | NumExpr of csNumExpr
+    | LogicExpr of csLogicExpr
+    | CompareExpr of csCompareExpr
+    | CallMethod of csExpr * csExpr list
     | Null
-    | Const of csValue
+    | ConstExp of csValue
     | Variable of string
     | Access of csExpr * csExpr
-    | Many of csExpr * csExpr
 
   and csNumExpr =
     | Add of csExpr * csExpr
@@ -80,6 +79,7 @@ module AST = struct
     | VarDec of { vType : csType; vName : string; vValue : csValue option }
     | Throw of { exc : csException }
     | Try of {
+        (*?*)
         catches : csStatement list;
         filters : csStatement list;
         finally : csStatement option;
@@ -105,4 +105,6 @@ module AST = struct
   }
 
   type csPrint = PrintF of { exp : csExpr }
+
+  (*?*)
 end

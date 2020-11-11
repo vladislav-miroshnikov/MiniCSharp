@@ -1,6 +1,6 @@
 (lang dune 2.7)
 
-(cram enable)
+; (cram enable)
 
 (package
  (name Lambda))
