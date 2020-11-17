@@ -13,3 +13,7 @@ test:
 celan: clean
 clean:
 	@$(RM) -r _build
+
+fmt:
+	dune build @fmt --auto-promote
+
