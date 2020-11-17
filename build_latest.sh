@@ -30,6 +30,7 @@ if [ "$LASTDIR" = "." ]; then
 	echo "DO NOTHING"
 else
 	cd $LASTDIR
+  echo "Going to run tests in $PWD..."
   PKG_OPAM="$LASTDIR.opam"
   if [ ! -f "$PKG_OPAM" ]; then
       echo "$PKG_OPAM does not exist. Exit"
