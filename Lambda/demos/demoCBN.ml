@@ -1,5 +1,6 @@
 open Lambda_lib.Lambda
 
+(* TODO: not really implemented *)
 let cbn_small_step_strat =
   let open Result in
   let rec helper = function

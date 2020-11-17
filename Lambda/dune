@@ -12,4 +12,5 @@
  (libraries Lambda.Lib))
 
 (cram
- (deps demos/demoAO.exe demos/demoNO.exe))
+ (deps demos/demoAO.exe demos/demoNO.exe REPL.exe))
+
