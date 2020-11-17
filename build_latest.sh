@@ -44,25 +44,34 @@ else
     echo "Checking $PKG_OPAM passed."
   fi
   eval $(opam env)
-	if [ "$STRAT" = "build" ]; then
-		#[ -d _opam ] || cp -r ~/.opam/4.10 _opam
-		#sudo apt install m4 -y
+  if [ "$STRAT" = "build" ]; then
+    #[ -d _opam ] || cp -r ~/.opam/4.10 _opam
+    #sudo apt install m4 -y
     #opam update
-		opam install --deps-only -t -y .
-		dune build
-    if [ $? = 0 ]; then
-      echo "Running $STRAT in $LASTDIR finished\n"
-    else
-      exit 1
-    fi
-	else
     opam install --deps-only -t -y .
-		dune runtest
+
+    dune build @fmt
+    if [ $? = 0 ]; then 
+      echo "Formatting OK"
+    else 
+      echo "Formatting is not decent. Either intergrate ocamlformat to VsCode"
+      echo "  or apply it manualy before every commit https://dune.readthedocs.io/en/stable/formatting.html"      
+      exit 1
+    fi
+    dune build
     if [ $? = 0 ]; then
       echo "Running $STRAT in $LASTDIR finished\n"
     else
       exit 1
     fi
-	fi
-
+  else
+    opam install --deps-only -t -y .
+    dune runtest
+    if [ $? = 0 ]; then
+      echo "Running $STRAT in $LASTDIR finished\n"
+    else
+      exit 1
+    fi
+  fi
 fi
+
