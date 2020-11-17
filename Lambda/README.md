@@ -24,3 +24,14 @@ Features in progress:
 - имена типов и функций -- snake_case
 - имена типов модулей и модулей -- CamelCase 
 - ворнинги должны быть пофикшены
+- используйте quoted string literals в тестах, чтобы не экранировать руками 
+```
+─( 11:21:01 )─< command 1 >────────────────────────────
+utop # {|
+  int main () {
+    return 0;
+  }
+  |};;
+- : string = "\n  int main () {\n    return 0;\n  }\n  "
+```
+- 1
