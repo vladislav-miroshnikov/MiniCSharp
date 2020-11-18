@@ -1,0 +1,7 @@
+(executable
+ (name REPL)
+ (public_name CsharpExcep.Repl)
+ (modules REPL))
+
+(cram
+ (deps demos/demoFirst.exe))
