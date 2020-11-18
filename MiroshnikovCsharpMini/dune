@@ -1,5 +1,0 @@
-(executable
- (name REPL)
- (public_name Csharp.Repl)
- (modules REPL)
- (libraries AST Parser))
