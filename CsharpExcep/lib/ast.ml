@@ -1,4 +1,4 @@
-type data_type = CsInt | CsVoid | CsString | CsClass of string
+type data_type = CsInt | CsClass of string | CsVoid | CsString
 [@@deriving show]
 
 type value =
@@ -34,7 +34,7 @@ type expr =
   | MoreOrEqual of expr * expr
   | Null
   | Access of expr * expr
-  | Const of value
+  | ConstExpr of value
   | IdentObj of string
   | ClassCreate of string * expr list (*first - name, other - args list*)
   | CallMethod of expr * expr list
