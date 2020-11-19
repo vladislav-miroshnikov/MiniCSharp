@@ -36,7 +36,7 @@ type expr =
   | Access of expr * expr
   | ConstExpr of value
   | IdentObj of string
-  | ClassCreate of string * expr list (*first - name, other - args list*)
+  | ClassCreate of expr * expr list (*first - name, other - args list*)
   | CallMethod of expr * expr list
   | Assign of expr * expr
 [@@deriving show]

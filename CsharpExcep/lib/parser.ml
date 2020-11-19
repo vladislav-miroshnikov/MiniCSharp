@@ -67,10 +67,10 @@ module Expr = struct
       ; token "void" >> return CsVoid
       ; (ident_obj >>= fun class_name -> return (CsClass class_name)) ]
 
-  let%test _ =
-    parse define_type (LazyStream.of_string "Car") = Some (CsClass "Car")
+  (* let%test _ =
+     parse define_type (LazyStream.of_string "Car") = Some (CsClass "Car") *)
 
-  let rec expression input = num_expr input
+  let rec expr input = num_expr input
   and num_expr input = (chainl1 and_expr or_op) input
   and and_expr input = (chainl1 comp_expr and_op) input
 
@@ -94,8 +94,38 @@ module Expr = struct
       input
 
   and primar_expr input =
-    ( (*init_obj <|> assign <|> field_access <|> method_call <|>*)
-      parens expression
-    <|> atomic )
+    ( init_instance (*<|> assign*) <|> field_access
+    <|> call_method <|> parens expr <|> atomic )
+      input
+
+  and separate_comma input = sep_by expr (token ",") input
+
+  and call_method input =
+    ( get_variable
+    >>= fun name ->
+    token "(" >> separate_comma
+    >>= fun args_list -> token ")" >> return (CallMethod (name, args_list)) )
+      input
+
+  and init_instance input =
+    ( token "new" >> get_variable
+    >>= fun name ->
+    token "(" >> separate_comma
+    >>= fun args_list -> token ")" >> return (ClassCreate (name, args_list)) )
+      input
+
+  and field_access input =
+    let helper = parens init_instance <|> call_method <|> get_variable in
+    ( helper
+    >>= fun head ->
+    many1 (token "." >> helper)
+    => fun tl -> List.fold_left (fun head tl -> Access (head, tl)) head tl )
+      input
+
+  and assign input =
+    let parse_left = field_access <|> call_method <|> get_variable in
+    ( parse_left
+    >>= fun left ->
+    token "=" >> expr >>= fun right -> return (Assign (left, right)) )
       input
 end
