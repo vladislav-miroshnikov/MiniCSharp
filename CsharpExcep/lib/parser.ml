@@ -94,8 +94,8 @@ module Expr = struct
       input
 
   and primar_expr input =
-    ( init_instance (*<|> assign*) <|> field_access
-    <|> call_method <|> parens expr <|> atomic )
+    ( init_instance <|> assign <|> field_access <|> call_method <|> parens expr
+    <|> atomic )
       input
 
   and separate_comma input = sep_by expr (token ",") input
