@@ -36,7 +36,7 @@ type expr =
   | Access of expr * expr
   | ConstExpr of value
   | IdentObj of string
-  | ClassCreate of expr * expr list (*first - name, other - args list*)
+  | ClassCreate of string * expr list (*first - name, other - args list*)
   | CallMethod of expr * expr list
   | Assign of expr * expr
 [@@deriving show]
@@ -44,7 +44,7 @@ type expr =
 and statement =
   | For of statement option * expr option * expr list * statement
   | If of expr * statement * statement option (*statement option is "else"*)
-  | While of expr * statement (*option?*)
+  | While of expr * statement
   | Break
   | Continue
   | Return of expr option
@@ -56,6 +56,7 @@ and statement =
       statement
       * ((data_type * expr option) option * expr option * statement) list
       * statement option (*WARN!*)
+  | Print of expr
 [@@deriving show]
 
 and field =
@@ -73,5 +74,3 @@ and csClass =
   | Class of
       modifier list * expr (*name*) * expr option (*parent class*) * field list
 [@@deriving show]
-
-type csPrint = PrintF of expr [@@deriving show]

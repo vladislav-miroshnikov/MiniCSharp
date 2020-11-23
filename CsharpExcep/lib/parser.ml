@@ -4,12 +4,12 @@ open Opal
 let reserved =
   [ "true"; "false"; "if"; "else"; "while"; "public"; "static"; "const"
   ; "override"; "try"; "catch"; "finally"; "when"; "void"; "string"; "char"
-  ; "Console"; "namespace"; "using"; "int"; "bool"; "for"; "Null"; "new"
+  ; "Console"; "namespace"; "using"; "int"; "bool"; "for"; "null"; "new"
   ; "return"; "break"; "continue"; "class" (*check*) ]
 
 let parens = between (token "(") (token ")")
+let braces = between (token "{") (token "}")
 
-(* let braces = between (token "{") (token "}") *)
 let get_modifier =
   choice
     [ token "public" >> return Public; token "static" >> return Static
@@ -35,7 +35,7 @@ module Expr = struct
   let me_op = token ">=" >> return (fun x y -> MoreOrEqual (x, y))
   let eq_op = token "==" >> return (fun x y -> Equal (x, y))
   let neq_op = token "!=" >> return (fun x y -> NotEqual (x, y))
-  let null = token "Null" >> return Null
+  let null = token "null" >> return Null
 
   let ident_obj =
     spaces >> letter <~> many alpha_num => implode
@@ -66,9 +66,6 @@ module Expr = struct
       [ token "int" >> return CsInt; token "String" >> return CsString
       ; token "void" >> return CsVoid
       ; (ident_obj >>= fun class_name -> return (CsClass class_name)) ]
-
-  (* let%test _ =
-     parse define_type (LazyStream.of_string "Car") = Some (CsClass "Car") *)
 
   let rec expr input = num_expr input
   and num_expr input = (chainl1 and_expr or_op) input
@@ -108,7 +105,7 @@ module Expr = struct
       input
 
   and init_instance input =
-    ( token "new" >> get_variable
+    ( token "new" >> ident_obj
     >>= fun name ->
     token "(" >> separate_comma
     >>= fun args_list -> token ")" >> return (ClassCreate (name, args_list)) )
@@ -128,4 +125,75 @@ module Expr = struct
     >>= fun left ->
     token "=" >> expr >>= fun right -> return (Assign (left, right)) )
       input
+end
+
+module Stat = struct
+  open Expr
+
+  let parse_continue = token "continue" >> token ";" >> return Continue
+  let parse_break = token "break" >> token ";" >> return Break
+
+  let parse_return =
+    token "return"
+    >> choice
+         [ (expr >>= fun result -> token ";" >> return (Return (Some result)))
+         ; token ";" >> return (Return None) ]
+
+  let parse_expr =
+    expr >>= fun express -> token ";" >> return (Expression express)
+
+  let rec parse_statement input =
+    choice
+      [ parse_continue; parse_break; parse_expr; parse_return; parse_if
+      ; parse_while; parse_var_declare; (*parse_for;*) parse_throw
+      ; parse_stat_block; parse_print (*parse_try*) ]
+      input
+
+  and parse_if input =
+    ( token "if" >> parens expr
+    >>= fun condition ->
+    parse_statement
+    >>= fun then_stat ->
+    choice
+      [ ( token "else" >> parse_statement
+        >>= fun else_stat -> return (If (condition, then_stat, Some else_stat))
+        ); return (If (condition, then_stat, None)) ] )
+      input
+
+  and parse_while input =
+    ( token "while" >> parens expr
+    >>= fun condition ->
+    parse_statement >>= fun stat -> return (While (condition, stat)) )
+      input
+
+  and parse_var_declare input =
+    let helper =
+      get_variable
+      >>= fun var_name ->
+      token "=" >> expr
+      >>= (fun var_value -> return (var_name, Some var_value))
+      <|> return (var_name, None) in
+    ( define_type
+    >>= fun var_type ->
+    sep_by1 helper (token ",")
+    >>= fun var_pair -> token ";" >> return (VarDeclare (var_type, var_pair)) )
+      input
+
+  and parse_stat_block input =
+    ( braces (sep_by parse_statement spaces)
+    >>= fun stats -> return (StatementBlock stats) )
+      input
+
+  (* and parse_for input =  *)
+  and parse_print input =
+    ( token "Console.WriteLine(" >> expr
+    >>= fun print_expression -> token ");" >> return (Print print_expression) )
+      input
+
+  and parse_throw input =
+    ( token "throw" >> expr
+    >>= fun throw_expr -> token ";" >> return (Throw throw_expr) )
+      input
+
+  (* and parse_try input = (token "try" >> parse_statement >>= fun try_stat -> ) *)
 end
