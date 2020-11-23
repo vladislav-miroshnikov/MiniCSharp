@@ -1,6 +1,0 @@
-# dune build REPL.exe
-# OCAMLPARAM: unset
-# Workspace root: /home/bozhnyuks/projects/fp2020hw
-$ /usr/bin/nproc > /tmp/dune525e07.output 2> /dev/null
-# Auto-detected concurrency: 8
-# disable binary cache
