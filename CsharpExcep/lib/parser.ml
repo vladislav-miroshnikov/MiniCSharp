@@ -5,19 +5,19 @@ let reserved =
   [ "true"; "false"; "if"; "else"; "while"; "public"; "static"; "const"
   ; "override"; "try"; "catch"; "finally"; "when"; "void"; "string"; "char"
   ; "Console"; "namespace"; "using"; "int"; "bool"; "for"; "null"; "new"
-  ; "return"; "break"; "continue"; "class" (*check*) ]
+  ; "return"; "break"; "continue"; "class" ]
 
 let parens = between (token "(") (token ")")
 let braces = between (token "{") (token "}")
 
-let get_modifier =
-  choice
-    [ token "public" >> return Public; token "static" >> return Static
-    ; token "const" >> return Const; token "override" >> return Override ]
+let get_modifier_list =
+  many
+    (choice
+       [ token "public" >> return Public; token "static" >> return Static
+       ; token "const" >> return Const; token "override" >> return Override ])
 
 let digits = spaces >> many1 digit => implode
 let convert_to_int = digits => int_of_string
-let get_value_list list = match list with Some x -> x | None -> []
 
 module Expr = struct
   open Ast
@@ -51,20 +51,20 @@ module Expr = struct
     token "\""
     >> many (satisfy (fun x -> x <> '\"'))
     >>= fun list ->
-    token "\"" >> return (ConstExpr (CsVString (string_of_chars list)))
+    token "\"" >> return (ConstExpr (VString (string_of_chars list)))
 
   let atomic =
     get_variable
-    <|> (convert_to_int >>= fun n -> return (ConstExpr (CsVInt n)))
+    <|> (convert_to_int >>= fun n -> return (ConstExpr (VInt n)))
     <|> parse_string
-    <|> (token "false" >> return (ConstExpr (CsVBool false)))
-    <|> (token "true" >> return (ConstExpr (CsVBool true)))
+    <|> (token "false" >> return (ConstExpr (VBool false)))
+    <|> (token "true" >> return (ConstExpr (VBool true)))
     <|> null
 
   let define_type =
     choice
-      [ token "int" >> return CsInt; token "String" >> return CsString
-      ; token "void" >> return CsVoid
+      [ token "int" >> return Int; token "String" >> return String
+      ; token "void" >> return Void
       ; (ident_obj >>= fun class_name -> return (CsClass class_name)) ]
 
   let rec expr input = num_expr input
@@ -82,7 +82,7 @@ module Expr = struct
     choice
       [ (token "!" >> lexeme primar_expr >>= fun x -> return (Not x))
       ; ( token "-" >> lexeme primar_expr
-        >>= fun x -> return (Sub (ConstExpr (CsVInt 0), x)) )
+        >>= fun x -> return (Sub (ConstExpr (VInt 0), x)) )
       ; (token "++" >> lexeme primar_expr >>= fun x -> return (PrefInc x))
       ; (token "--" >> lexeme primar_expr >>= fun x -> return (PrefDec x))
       ; (lexeme primar_expr >>= fun x -> token "++" >> return (PostInc x))
@@ -98,7 +98,7 @@ module Expr = struct
   and separate_comma input = sep_by expr (token ",") input
 
   and call_method input =
-    ( get_variable
+    ( ident_obj
     >>= fun name ->
     token "(" >> separate_comma
     >>= fun args_list -> token ")" >> return (CallMethod (name, args_list)) )
@@ -130,23 +130,11 @@ end
 module Stat = struct
   open Expr
 
-  let parse_continue = token "continue" >> token ";" >> return Continue
-  let parse_break = token "break" >> token ";" >> return Break
-
-  let parse_return =
-    token "return"
-    >> choice
-         [ (expr >>= fun result -> token ";" >> return (Return (Some result)))
-         ; token ";" >> return (Return None) ]
-
-  let parse_expr =
-    expr >>= fun express -> token ";" >> return (Expression express)
-
   let rec parse_statement input =
     choice
       [ parse_continue; parse_break; parse_expr; parse_return; parse_if
-      ; parse_while; parse_var_declare; (*parse_for;*) parse_throw
-      ; parse_stat_block; parse_print (*parse_try*) ]
+      ; parse_while; parse_var_declare; parse_for; parse_throw; parse_stat_block
+      ; parse_print (*parse_try*) ]
       input
 
   and parse_if input =
@@ -184,7 +172,22 @@ module Stat = struct
     >>= fun stats -> return (StatementBlock stats) )
       input
 
-  (* and parse_for input =  *)
+  and parse_for input =
+    ( token "for" >> token "("
+    >> choice
+         [ (parse_statement >>= fun stat -> return (Some stat))
+         ; token ";" >> return None ]
+    >>= fun declare ->
+    choice
+      [ (expr >>= fun expr -> token ";" >> return (Some expr))
+      ; token ";" >> return None ]
+    >>= fun condition ->
+    sep_by expr (token ",")
+    >>= fun after ->
+    token ")" >> parse_statement
+    >>= fun body -> return (For (declare, condition, after, body)) )
+      input
+
   and parse_print input =
     ( token "Console.WriteLine(" >> expr
     >>= fun print_expression -> token ");" >> return (Print print_expression) )
@@ -195,5 +198,84 @@ module Stat = struct
     >>= fun throw_expr -> token ";" >> return (Throw throw_expr) )
       input
 
+  and parse_expr input =
+    (expr >>= fun express -> token ";" >> return (Expression express)) input
+
+  and parse_return input =
+    ( token "return"
+    >> choice
+         [ (expr >>= fun result -> token ";" >> return (Return (Some result)))
+         ; token ";" >> return (Return None) ] )
+      input
+
+  and parse_continue input =
+    (token "continue" >> token ";" >> return Continue) input
+
+  and parse_break input = (token "break" >> token ";" >> return Break) input
+
   (* and parse_try input = (token "try" >> parse_statement >>= fun try_stat -> ) *)
 end
+
+let parse_params =
+  Expr.define_type
+  >>= fun _type -> Expr.ident_obj >>= fun name -> return (_type, name)
+
+let parse_field =
+  let helper =
+    Expr.ident_obj
+    >>= fun name ->
+    token "=" >> Expr.expr
+    >>= (fun value -> return (name, Some value))
+    <|> return (name, None) in
+  get_modifier_list
+  >>= fun modifiers ->
+  Expr.define_type
+  >>= fun f_type ->
+  sep_by helper (token ",")
+  >>= fun var_list ->
+  token ";" >> return (VariableField (modifiers, f_type, var_list))
+
+let parse_method =
+  get_modifier_list
+  >>= fun modifiers ->
+  Expr.define_type
+  >>= fun method_type ->
+  Expr.ident_obj
+  >>= fun method_name ->
+  token "("
+  >> sep_by parse_params (token ",")
+  >>= fun params_list ->
+  token ")" >> Stat.parse_stat_block
+  >>= fun stat_block ->
+  return
+    (Method (modifiers, method_type, method_name, params_list, Some stat_block))
+
+let parse_constructor =
+  get_modifier_list
+  >>= fun modifiers ->
+  Expr.ident_obj
+  >>= fun name ->
+  token "("
+  >> sep_by parse_params (token ",")
+  >>= fun params_list ->
+  token ")" >> Stat.parse_stat_block
+  >>= fun stat_block ->
+  return (Constructor (modifiers, name, params_list, stat_block))
+
+let parse_class_elements = parse_field <|> parse_method <|> parse_constructor
+
+let parse_class =
+  get_modifier_list
+  >>= fun modifiers ->
+  token "class" >> Expr.ident_obj
+  >>= fun name ->
+  choice
+    [ (token ":" >> Expr.ident_obj >>= fun parent -> return (Some parent))
+    ; return None ]
+  >>= fun _parent ->
+  token "{"
+  >> sep_by parse_class_elements spaces
+  >>= fun class_elements ->
+  token "}" >> return (Class (modifiers, name, _parent, class_elements))
+
+let parser = many parse_class
