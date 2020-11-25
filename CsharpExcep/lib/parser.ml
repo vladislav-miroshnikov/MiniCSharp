@@ -98,14 +98,14 @@ module Expr = struct
   and separate_comma input = sep_by expr (token ",") input
 
   and call_method input =
-    ( ident_obj
+    ( get_variable
     >>= fun name ->
     token "(" >> separate_comma
     >>= fun args_list -> token ")" >> return (CallMethod (name, args_list)) )
       input
 
   and init_instance input =
-    ( token "new" >> ident_obj
+    ( token "new" >> get_variable
     >>= fun name ->
     token "(" >> separate_comma
     >>= fun args_list -> token ")" >> return (ClassCreate (name, args_list)) )
@@ -134,7 +134,7 @@ module Stat = struct
     choice
       [ parse_continue; parse_break; parse_expr; parse_return; parse_if
       ; parse_while; parse_var_declare; parse_for; parse_throw; parse_stat_block
-      ; parse_print (*parse_try*) ]
+      ; parse_print; parse_try ]
       input
 
   and parse_if input =
@@ -213,16 +213,48 @@ module Stat = struct
 
   and parse_break input = (token "break" >> token ";" >> return Break) input
 
-  (* and parse_try input = (token "try" >> parse_statement >>= fun try_stat -> ) *)
+  and parse_try input =
+    let parse_filter =
+      token "when" >> token "(" >> Expr.expr
+      >>= fun filter -> token ")" >> return (Some filter) in
+    let parse_catch =
+      token "catch"
+      >> ( token "(" >> Expr.define_type
+         >>= fun excep_type ->
+         Expr.get_variable
+         >>= fun var_name ->
+         token ")"
+         >> choice [(parse_filter >>= fun fil -> return fil); return None]
+         >>= fun filter ->
+         parse_statement
+         >>= fun catch_block ->
+         return (Some (excep_type, Some var_name), filter, catch_block) ) in
+    ( token "try" >> parse_statement
+    >>= fun try_stat ->
+    many parse_catch
+    >>= fun catch_list ->
+    match catch_list with
+    | [] ->
+        (*because if there was no catch, then there must be finally, according to the C # documentation*)
+        token "finally" >> parse_statement
+        >>= fun finally_block ->
+        return (Try (try_stat, catch_list, Some finally_block))
+    | _ ->
+        choice
+          [ ( token "finally" >> parse_statement
+            >>= fun finally_block ->
+            return (Try (try_stat, catch_list, Some finally_block)) )
+          ; return (Try (try_stat, catch_list, None)) ] )
+      input
 end
 
 let parse_params =
   Expr.define_type
-  >>= fun _type -> Expr.ident_obj >>= fun name -> return (_type, name)
+  >>= fun _type -> Expr.get_variable >>= fun name -> return (_type, name)
 
 let parse_field =
   let helper =
-    Expr.ident_obj
+    Expr.get_variable
     >>= fun name ->
     token "=" >> Expr.expr
     >>= (fun value -> return (name, Some value))
@@ -240,7 +272,7 @@ let parse_method =
   >>= fun modifiers ->
   Expr.define_type
   >>= fun method_type ->
-  Expr.ident_obj
+  Expr.get_variable
   >>= fun method_name ->
   token "("
   >> sep_by parse_params (token ",")
@@ -253,7 +285,7 @@ let parse_method =
 let parse_constructor =
   get_modifier_list
   >>= fun modifiers ->
-  Expr.ident_obj
+  Expr.get_variable
   >>= fun name ->
   token "("
   >> sep_by parse_params (token ",")
@@ -267,10 +299,10 @@ let parse_class_elements = parse_field <|> parse_method <|> parse_constructor
 let parse_class =
   get_modifier_list
   >>= fun modifiers ->
-  token "class" >> Expr.ident_obj
+  token "class" >> Expr.get_variable
   >>= fun name ->
   choice
-    [ (token ":" >> Expr.ident_obj >>= fun parent -> return (Some parent))
+    [ (token ":" >> Expr.get_variable >>= fun parent -> return (Some parent))
     ; return None ]
   >>= fun _parent ->
   token "{"

@@ -35,8 +35,8 @@ type expr =
   | Access of expr * expr
   | ConstExpr of value
   | IdentObj of string
-  | ClassCreate of string * expr list (*first - name, other - args list*)
-  | CallMethod of string * expr list
+  | ClassCreate of expr * expr list (*first - name, other - args list*)
+  | CallMethod of expr * expr list
   | Assign of expr * expr
 [@@deriving show]
 
@@ -52,29 +52,27 @@ and statement =
   | Throw of expr
   | StatementBlock of statement list
   | Try of
-      statement
+      statement (*it is the body of try*)
       * ((data_type * expr option) option * expr option * statement) list
-      * statement option (*WARN!*)
+      (*it is list of catches: (data_type * expr option) this is a pair of the following form (DivideByZeroException ex),
+        second param is option because you can write (DivideByZeroException) without ex
+          next expr option is a filter (when (y==0 && x == 0)), statement is the body of catch*)
+      * statement option (*it is the finally body*)
   | Print of expr
 [@@deriving show]
 
 and field =
-  | VariableField of modifier list * data_type * (string * expr option) list (*example: static int a = 3, b*)
+  | VariableField of modifier list * data_type * (expr * expr option) list (*example: static int a = 3, b*)
   | Method of
       modifier list
       * data_type
-      * string
-      * (data_type * string) list
+      * expr
+      * (data_type * expr) list
       * statement option
-  | Constructor of
-      modifier list * string * (data_type * string) list * statement
+  | Constructor of modifier list * expr * (data_type * expr) list * statement
 [@@deriving show]
 
 and csClass =
   | Class of
-      modifier list
-      * string (*name*)
-      * string option
-      (*parent class*)
-      * field list
+      modifier list * expr (*name*) * expr option (*parent class*) * field list
 [@@deriving show]
