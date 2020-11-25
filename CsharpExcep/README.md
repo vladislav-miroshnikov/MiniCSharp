@@ -8,12 +8,14 @@ Author: Miroshnikov Vladislav, vladislaw.miroshnikov@gmail.com
 
 Features done:
 
-- 1
-- 2
+- 1 AST + переименовал типы
+- 2 Parser
+- 3 Убрал возможность парсинга массивов, так как их нет по заданию
+- 4 Тесты на парсер
 
 Features in progress:
 
-- 1
+- 1 Cram test
 - 2
 
 ##### Замечания по стилю кодирования

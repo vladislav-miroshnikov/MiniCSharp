@@ -1,6 +1,8 @@
 open Ast
 open Opal
 
+let apply_parser parser input = parse parser (LazyStream.of_string input)
+
 let reserved =
   [ "true"; "false"; "if"; "else"; "while"; "public"; "static"; "const"
   ; "override"; "try"; "catch"; "finally"; "when"; "void"; "string"; "char"
@@ -62,9 +64,14 @@ module Expr = struct
     <|> null
 
   let define_type =
+    let check =
+      option ' ' (exactly '[')
+      >>= fun _char ->
+      match _char with '[' -> mzero | _ -> return (Some _char) in
     choice
-      [ token "int" >> return Int; token "String" >> return String
-      ; token "void" >> return Void
+      [ token "int" >> check >> return Int
+      ; token "string" >> check >> return String
+      ; token "void" >> check >> return Void
       ; (ident_obj >>= fun class_name -> return (CsClass class_name)) ]
 
   let rec expr input = num_expr input
@@ -216,19 +223,34 @@ module Stat = struct
   and parse_try input =
     let parse_filter =
       token "when" >> token "(" >> Expr.expr
-      >>= fun filter -> token ")" >> return (Some filter) in
+      >>= (fun filter -> token ")" >> return (Some filter))
+      <|> return None in
     let parse_catch =
       token "catch"
-      >> ( token "(" >> Expr.define_type
-         >>= fun excep_type ->
-         Expr.get_variable
-         >>= fun var_name ->
-         token ")"
-         >> choice [(parse_filter >>= fun fil -> return fil); return None]
-         >>= fun filter ->
-         parse_statement
-         >>= fun catch_block ->
-         return (Some (excep_type, Some var_name), filter, catch_block) ) in
+      (*here are all 6 possible catch cases:
+        1 - catch {}
+        2 - catch when (...) {}
+        3 - catch (Exception) {}
+        4 - catch (Exception) when (...) {}
+        5 - catch (Exception ex) {}
+        6 - catch (Exception ex) when (..)
+        all cases have been tested in tests.ml*)
+      >> choice
+           [ ( token "(" >> Expr.define_type
+             >>= fun excep_type ->
+             choice
+               [ (Expr.get_variable >>= fun name -> return (Some name))
+               ; return None ]
+             >>= fun var_name ->
+             token ")" >> parse_filter
+             >>= fun filter ->
+             parse_statement
+             >>= fun catch_block ->
+             return (Some (excep_type, var_name), filter, catch_block) )
+           ; ( parse_filter
+             >>= fun filter ->
+             parse_statement
+             >>= fun catch_block -> return (None, filter, catch_block) ) ] in
     ( token "try" >> parse_statement
     >>= fun try_stat ->
     many parse_catch
