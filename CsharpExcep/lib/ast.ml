@@ -1,4 +1,5 @@
-type data_type = Int | CsClass of string | Void | String [@@deriving show]
+type data_type = Int | Bool | CsClass of string | Void | String
+[@@deriving show]
 
 type value =
   | VInt of int
@@ -72,7 +73,7 @@ and field =
   | Constructor of modifier list * expr * (data_type * expr) list * statement
 [@@deriving show]
 
-and csClass =
+and cs_class =
   | Class of
       modifier list * expr (*name*) * expr option (*parent class*) * field list
 [@@deriving show]

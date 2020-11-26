@@ -72,6 +72,7 @@ module Expr = struct
       [ token "int" >> check >> return Int
       ; token "string" >> check >> return String
       ; token "void" >> check >> return Void
+      ; token "bool" >> check >> return Bool
       ; (ident_obj >>= fun class_name -> return (CsClass class_name)) ]
 
   let rec expr input = num_expr input
