@@ -35,9 +35,9 @@ type expr =
   | Null
   | Access of expr * expr
   | ConstExpr of value
-  | IdentObj of string
-  | ClassCreate of expr * expr list (*first - name, other - args list*)
-  | CallMethod of expr * expr list
+  | IdentVar of string
+  | ClassCreate of string * expr list (*first - name, other - args list*)
+  | CallMethod of string * expr list
   | Assign of expr * expr
 [@@deriving show]
 
@@ -63,17 +63,21 @@ and statement =
 [@@deriving show]
 
 and field =
-  | VariableField of modifier list * data_type * (expr * expr option) list (*example: static int a = 3, b*)
+  | VariableField of modifier list * data_type * (string * expr option) list (*example: static int a = 3, b*)
   | Method of
       modifier list
       * data_type
-      * expr
+      * string
       * (data_type * expr) list
       * statement option
-  | Constructor of modifier list * expr * (data_type * expr) list * statement
+  | Constructor of modifier list * string * (data_type * expr) list * statement
 [@@deriving show]
 
 and cs_class =
   | Class of
-      modifier list * expr (*name*) * expr option (*parent class*) * field list
+      modifier list
+      * string (*name*)
+      * string option
+      (*parent class*)
+      * field list
 [@@deriving show]

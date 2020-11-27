@@ -43,7 +43,7 @@ module Expr = struct
     spaces >> letter <~> many alpha_num => implode
     >>= function x when List.mem x reserved -> mzero | x -> return x
 
-  let get_variable = ident_obj => fun x -> IdentObj x
+  let get_variable = ident_obj => fun x -> IdentVar x
 
   let parse_string =
     let string_of_chars chars =
@@ -106,14 +106,14 @@ module Expr = struct
   and separate_comma input = sep_by expr (token ",") input
 
   and call_method input =
-    ( get_variable
+    ( ident_obj
     >>= fun name ->
     token "(" >> separate_comma
     >>= fun args_list -> token ")" >> return (CallMethod (name, args_list)) )
       input
 
   and init_instance input =
-    ( token "new" >> get_variable
+    ( token "new" >> ident_obj
     >>= fun name ->
     token "(" >> separate_comma
     >>= fun args_list -> token ")" >> return (ClassCreate (name, args_list)) )
@@ -277,7 +277,7 @@ let parse_params =
 
 let parse_field =
   let helper =
-    Expr.get_variable
+    Expr.ident_obj
     >>= fun name ->
     token "=" >> Expr.expr
     >>= (fun value -> return (name, Some value))
@@ -295,7 +295,7 @@ let parse_method =
   >>= fun modifiers ->
   Expr.define_type
   >>= fun method_type ->
-  Expr.get_variable
+  Expr.ident_obj
   >>= fun method_name ->
   token "("
   >> sep_by parse_params (token ",")
@@ -308,7 +308,7 @@ let parse_method =
 let parse_constructor =
   get_modifier_list
   >>= fun modifiers ->
-  Expr.get_variable
+  Expr.ident_obj
   >>= fun name ->
   token "("
   >> sep_by parse_params (token ",")
@@ -322,10 +322,10 @@ let parse_class_elements = parse_field <|> parse_method <|> parse_constructor
 let parse_class =
   get_modifier_list
   >>= fun modifiers ->
-  token "class" >> Expr.get_variable
+  token "class" >> Expr.ident_obj
   >>= fun name ->
   choice
-    [ (token ":" >> Expr.get_variable >>= fun parent -> return (Some parent))
+    [ (token ":" >> Expr.ident_obj >>= fun parent -> return (Some parent))
     ; return None ]
   >>= fun _parent ->
   token "{"

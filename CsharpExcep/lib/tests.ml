@@ -11,7 +11,7 @@ let%test _ = apply_parser convert_to_int "4" = Some 4
 let%test _ = apply_parser null "  null" = Some Null
 let%test _ = apply_parser ident_obj "   car" = Some "car"
 let%test _ = apply_parser ident_obj "  Cat1" = Some "Cat1"
-let%test _ = apply_parser get_variable "   Cat" = Some (IdentObj "Cat")
+let%test _ = apply_parser get_variable "   Cat" = Some (IdentVar "Cat")
 
 let%test _ =
   apply_parser parse_string "\"Parse\"" = Some (ConstExpr (VString "Parse"))
@@ -34,7 +34,7 @@ let%test _ = apply_parser define_type "  Excep" = Some (CsClass "Excep")
 (* ------------------------  EXPRESSIONS -------------------------- *)
 let%test _ =
   apply_parser expr "a = b = 1"
-  = Some (Assign (IdentObj "a", Assign (IdentObj "b", ConstExpr (VInt 1))))
+  = Some (Assign (IdentVar "a", Assign (IdentVar "b", ConstExpr (VInt 1))))
 
 let%test _ =
   apply_parser expr "4 + 5"
@@ -50,38 +50,36 @@ let%test _ =
 
 let%test _ =
   apply_parser expr "x = true"
-  = Some (Assign (IdentObj "x", ConstExpr (VBool true)))
+  = Some (Assign (IdentVar "x", ConstExpr (VBool true)))
 
 let%test _ =
   apply_parser expr "a.b.c"
-  = Some (Access (Access (IdentObj "a", IdentObj "b"), IdentObj "c"))
+  = Some (Access (Access (IdentVar "a", IdentVar "b"), IdentVar "c"))
 
 let%test _ =
   apply_parser expr "obj.Sum(5, arg2, arg3 * 3)"
   = Some
       (Access
-         ( IdentObj "obj"
+         ( IdentVar "obj"
          , CallMethod
-             ( IdentObj "Sum"
-             , [ ConstExpr (VInt 5); IdentObj "arg2"
-               ; Mul (IdentObj "arg3", ConstExpr (VInt 3)) ] ) ))
+             ( "Sum"
+             , [ ConstExpr (VInt 5); IdentVar "arg2"
+               ; Mul (IdentVar "arg3", ConstExpr (VInt 3)) ] ) ))
 
 let%test _ =
   apply_parser expr "Sum(obj.a, 3)"
   = Some
       (CallMethod
-         ( IdentObj "Sum"
-         , [Access (IdentObj "obj", IdentObj "a"); ConstExpr (VInt 3)] ))
+         ("Sum", [Access (IdentVar "obj", IdentVar "a"); ConstExpr (VInt 3)]))
 
 let%test _ =
   apply_parser expr "new Shop(5,\"MVideo\")"
   = Some
-      (ClassCreate
-         (IdentObj "Shop", [ConstExpr (VInt 5); ConstExpr (VString "MVideo")]))
+      (ClassCreate ("Shop", [ConstExpr (VInt 5); ConstExpr (VString "MVideo")]))
 
 let%test _ =
   apply_parser expr "Fork(new Child())"
-  = Some (CallMethod (IdentObj "Fork", [ClassCreate (IdentObj "Child", [])]))
+  = Some (CallMethod ("Fork", [ClassCreate ("Child", [])]))
 
 (* -----------------------  STATEMENTS ------------------------*)
 
@@ -90,9 +88,9 @@ let%test _ =
   = Some
       (VarDeclare
          ( Int
-         , [ (IdentObj "a", Some (ConstExpr (VInt 0)))
-           ; (IdentObj "b", Some (ConstExpr (VInt 1)))
-           ; (IdentObj "c", Some (ConstExpr (VInt 2))) ] ))
+         , [ (IdentVar "a", Some (ConstExpr (VInt 0)))
+           ; (IdentVar "b", Some (ConstExpr (VInt 1)))
+           ; (IdentVar "c", Some (ConstExpr (VInt 2))) ] ))
 
 let%test _ = apply_parser parse_break "break;" = Some Break
 let%test _ = apply_parser parse_continue "continue;" = Some Continue
@@ -105,7 +103,7 @@ let%test _ =
   apply_parser parse_statement {|  if(num1 > num2)
 {
 }   |}
-  = Some (If (More (IdentObj "num1", IdentObj "num2"), StatementBlock [], None))
+  = Some (If (More (IdentVar "num1", IdentVar "num2"), StatementBlock [], None))
 
 let%test _ =
   apply_parser parse_statement
@@ -114,7 +112,7 @@ let%test _ =
 }   |}
   = Some
       (If
-         ( More (IdentObj "num1", IdentObj "num2")
+         ( More (IdentVar "num1", IdentVar "num2")
          , StatementBlock [Print (ConstExpr (VString "help"))]
          , None ))
 
@@ -134,13 +132,12 @@ else
 } |}
   = Some
       (If
-         ( More (IdentObj "num1", IdentObj "num2")
-         , StatementBlock
-             [Print (Access (IdentObj "a", CallMethod (IdentObj "Sum", [])))]
+         ( More (IdentVar "num1", IdentVar "num2")
+         , StatementBlock [Print (Access (IdentVar "a", CallMethod ("Sum", [])))]
          , Some
              (If
-                ( Less (IdentObj "num1", IdentObj "num2")
-                , StatementBlock [Print (Access (IdentObj "a", IdentObj "b"))]
+                ( Less (IdentVar "num1", IdentVar "num2")
+                , StatementBlock [Print (Access (IdentVar "a", IdentVar "b"))]
                 , Some (StatementBlock [Print (ConstExpr (VString "2"))]) )) ))
 
 let%test _ =
@@ -152,9 +149,9 @@ let%test _ =
 } |}
   = Some
       (While
-         ( More (IdentObj "i", ConstExpr (VInt 0))
+         ( More (IdentVar "i", ConstExpr (VInt 0))
          , StatementBlock
-             [Print (IdentObj "i"); Expression (PostDec (IdentObj "i"))] ))
+             [Print (IdentVar "i"); Expression (PostDec (IdentVar "i"))] ))
 
 let%test _ =
   apply_parser parse_statement
@@ -164,9 +161,9 @@ let%test _ =
 }|}
   = Some
       (For
-         ( Some (VarDeclare (Int, [(IdentObj "i", Some (ConstExpr (VInt 0)))]))
-         , Some (Less (IdentObj "i", ConstExpr (VInt 9)))
-         , [PostInc (IdentObj "i")]
+         ( Some (VarDeclare (Int, [(IdentVar "i", Some (ConstExpr (VInt 0)))]))
+         , Some (Less (IdentVar "i", ConstExpr (VInt 9)))
+         , [PostInc (IdentVar "i")]
          , StatementBlock [Print (ConstExpr (VInt 1))] ))
 
 let%test _ =
@@ -179,7 +176,7 @@ for (; ;)
 |}
   = Some
       (StatementBlock
-         [ If (Less (IdentObj "a", IdentObj "b"), StatementBlock [], None)
+         [ If (Less (IdentVar "a", IdentVar "b"), StatementBlock [], None)
          ; For (None, None, [], StatementBlock [Print (ConstExpr (VString "1"))])
          ])
 
@@ -192,9 +189,9 @@ let%test _ =
   = Some
       (For
          ( None
-         , Some (Less (IdentObj "i", ConstExpr (VInt 9)))
+         , Some (Less (IdentVar "i", ConstExpr (VInt 9)))
          , []
-         , StatementBlock [Print (Mul (IdentObj "i", IdentObj "i"))] ))
+         , StatementBlock [Print (Mul (IdentVar "i", IdentVar "i"))] ))
 
 let%test _ =
   apply_parser parse_statement
@@ -206,12 +203,12 @@ let%test _ =
 }|}
   = Some
       (For
-         ( Some (VarDeclare (Int, [(IdentObj "i", Some (ConstExpr (VInt 0)))]))
-         , Some (Less (IdentObj "i", ConstExpr (VInt 9)))
-         , [PostInc (IdentObj "i")]
+         ( Some (VarDeclare (Int, [(IdentVar "i", Some (ConstExpr (VInt 0)))]))
+         , Some (Less (IdentVar "i", ConstExpr (VInt 9)))
+         , [PostInc (IdentVar "i")]
          , StatementBlock
-             [ If (Equal (IdentObj "i", ConstExpr (VInt 5)), Break, None)
-             ; Print (IdentObj "i") ] ))
+             [ If (Equal (IdentVar "i", ConstExpr (VInt 5)), Break, None)
+             ; Print (IdentVar "i") ] ))
 
 let%test _ =
   apply_parser parse_statement
@@ -232,12 +229,12 @@ let%test _ =
   = Some
       (Try
          ( StatementBlock
-             [ VarDeclare (Int, [(IdentObj "x", Some (ConstExpr (VInt 5)))])
+             [ VarDeclare (Int, [(IdentVar "x", Some (ConstExpr (VInt 5)))])
              ; VarDeclare
                  ( Int
-                 , [ ( IdentObj "y"
-                     , Some (Div (IdentObj "x", ConstExpr (VInt 0))) ) ] )
-             ; Print (IdentObj "y") ]
+                 , [ ( IdentVar "y"
+                     , Some (Div (IdentVar "x", ConstExpr (VInt 0))) ) ] )
+             ; Print (IdentVar "y") ]
          , [(None, None, StatementBlock [Print (ConstExpr (VString "excep"))])]
          , Some (StatementBlock [Print (ConstExpr (VString "finally"))]) ))
 
@@ -257,12 +254,12 @@ catch
   = Some
       (Try
          ( StatementBlock
-             [ VarDeclare (Int, [(IdentObj "x", Some (ConstExpr (VInt 5)))])
+             [ VarDeclare (Int, [(IdentVar "x", Some (ConstExpr (VInt 5)))])
              ; VarDeclare
                  ( Int
-                 , [ ( IdentObj "y"
-                     , Some (Div (IdentObj "x", ConstExpr (VInt 0))) ) ] )
-             ; Print (IdentObj "x") ]
+                 , [ ( IdentVar "y"
+                     , Some (Div (IdentVar "x", ConstExpr (VInt 0))) ) ] )
+             ; Print (IdentVar "x") ]
          , [(None, None, StatementBlock [Print (ConstExpr (VString "3"))])]
          , None ))
 
@@ -282,11 +279,11 @@ finally
   = Some
       (Try
          ( StatementBlock
-             [ VarDeclare (Int, [(IdentObj "x", Some (ConstExpr (VInt 5)))])
+             [ VarDeclare (Int, [(IdentVar "x", Some (ConstExpr (VInt 5)))])
              ; VarDeclare
                  ( Int
-                 , [ ( IdentObj "y"
-                     , Some (Div (IdentObj "x", ConstExpr (VInt 0))) ) ] ) ]
+                 , [ ( IdentVar "y"
+                     , Some (Div (IdentVar "x", ConstExpr (VInt 0))) ) ] ) ]
          , []
          , Some (StatementBlock []) ))
 
@@ -296,7 +293,7 @@ let%test _ =
       (Try
          ( StatementBlock []
          , [ ( None
-             , Some (Equal (IdentObj "a", ConstExpr (VInt 2)))
+             , Some (Equal (IdentVar "a", ConstExpr (VInt 2)))
              , StatementBlock [] ) ]
          , None ))
 
@@ -310,7 +307,7 @@ let%test _ =
       (Try
          ( StatementBlock []
          , [ ( Some (CsClass "Exception", None)
-             , Some (Equal (IdentObj "a", ConstExpr (VInt 2)))
+             , Some (Equal (IdentVar "a", ConstExpr (VInt 2)))
              , StatementBlock [] ) ]
          , None ))
 
@@ -327,8 +324,8 @@ let%test _ =
   = Some
       (Try
          ( StatementBlock []
-         , [ ( Some (CsClass "Exception", Some (IdentObj "e"))
-             , Some (Equal (IdentObj "a", ConstExpr (VInt 2)))
+         , [ ( Some (CsClass "Exception", Some (IdentVar "e"))
+             , Some (Equal (IdentVar "a", ConstExpr (VInt 2)))
              , StatementBlock [] ) ]
          , None ))
 
@@ -337,14 +334,14 @@ let%test _ =
   = Some
       (Try
          ( StatementBlock []
-         , [ ( Some (CsClass "Exception", Some (IdentObj "e"))
+         , [ ( Some (CsClass "Exception", Some (IdentVar "e"))
              , None
              , StatementBlock [] ) ]
          , None ))
 
 let%test _ =
   apply_parser parse_field {|  public int sum;|}
-  = Some (VariableField ([Public], Int, [(IdentObj "sum", None)]))
+  = Some (VariableField ([Public], Int, [("sum", None)]))
 
 let%test _ =
   apply_parser parse_method
@@ -365,14 +362,14 @@ let%test _ =
       (Method
          ( [Static]
          , Void
-         , IdentObj "SayHello"
+         , "SayHello"
          , []
          , Some
              (StatementBlock
                 [ VarDeclare
-                    (Int, [(IdentObj "hour", Some (ConstExpr (VInt 23)))])
+                    (Int, [(IdentVar "hour", Some (ConstExpr (VInt 23)))])
                 ; If
-                    ( More (IdentObj "hour", ConstExpr (VInt 22))
+                    ( More (IdentVar "hour", ConstExpr (VInt 22))
                     , StatementBlock [Return None]
                     , Some
                         (StatementBlock [Print (ConstExpr (VString "Hello"))])
@@ -384,8 +381,8 @@ let%test _ =
   = Some
       (Constructor
          ( [Public]
-         , IdentObj "Person"
-         , [(String, IdentObj "n")]
+         , "Person"
+         , [(String, IdentVar "n")]
          , StatementBlock
-             [ Expression (Assign (IdentObj "name", IdentObj "n"))
-             ; Expression (Assign (IdentObj "age", ConstExpr (VInt 18))) ] ))
+             [ Expression (Assign (IdentVar "name", IdentVar "n"))
+             ; Expression (Assign (IdentVar "age", ConstExpr (VInt 18))) ] ))
