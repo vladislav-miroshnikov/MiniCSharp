@@ -48,7 +48,7 @@ and statement =
   | Break
   | Continue
   | Return of expr option
-  | VarDeclare of data_type * (expr * expr option) list
+  | VarDeclare of data_type * (string * expr option) list
   | Expression of expr
   | Throw of expr
   | StatementBlock of statement list

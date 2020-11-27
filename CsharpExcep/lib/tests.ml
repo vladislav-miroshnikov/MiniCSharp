@@ -88,9 +88,8 @@ let%test _ =
   = Some
       (VarDeclare
          ( Int
-         , [ (IdentVar "a", Some (ConstExpr (VInt 0)))
-           ; (IdentVar "b", Some (ConstExpr (VInt 1)))
-           ; (IdentVar "c", Some (ConstExpr (VInt 2))) ] ))
+         , [ ("a", Some (ConstExpr (VInt 0))); ("b", Some (ConstExpr (VInt 1)))
+           ; ("c", Some (ConstExpr (VInt 2))) ] ))
 
 let%test _ = apply_parser parse_break "break;" = Some Break
 let%test _ = apply_parser parse_continue "continue;" = Some Continue
@@ -161,7 +160,7 @@ let%test _ =
 }|}
   = Some
       (For
-         ( Some (VarDeclare (Int, [(IdentVar "i", Some (ConstExpr (VInt 0)))]))
+         ( Some (VarDeclare (Int, [("i", Some (ConstExpr (VInt 0)))]))
          , Some (Less (IdentVar "i", ConstExpr (VInt 9)))
          , [PostInc (IdentVar "i")]
          , StatementBlock [Print (ConstExpr (VInt 1))] ))
@@ -203,7 +202,7 @@ let%test _ =
 }|}
   = Some
       (For
-         ( Some (VarDeclare (Int, [(IdentVar "i", Some (ConstExpr (VInt 0)))]))
+         ( Some (VarDeclare (Int, [("i", Some (ConstExpr (VInt 0)))]))
          , Some (Less (IdentVar "i", ConstExpr (VInt 9)))
          , [PostInc (IdentVar "i")]
          , StatementBlock
@@ -229,11 +228,9 @@ let%test _ =
   = Some
       (Try
          ( StatementBlock
-             [ VarDeclare (Int, [(IdentVar "x", Some (ConstExpr (VInt 5)))])
+             [ VarDeclare (Int, [("x", Some (ConstExpr (VInt 5)))])
              ; VarDeclare
-                 ( Int
-                 , [ ( IdentVar "y"
-                     , Some (Div (IdentVar "x", ConstExpr (VInt 0))) ) ] )
+                 (Int, [("y", Some (Div (IdentVar "x", ConstExpr (VInt 0))))])
              ; Print (IdentVar "y") ]
          , [(None, None, StatementBlock [Print (ConstExpr (VString "excep"))])]
          , Some (StatementBlock [Print (ConstExpr (VString "finally"))]) ))
@@ -254,11 +251,9 @@ catch
   = Some
       (Try
          ( StatementBlock
-             [ VarDeclare (Int, [(IdentVar "x", Some (ConstExpr (VInt 5)))])
+             [ VarDeclare (Int, [("x", Some (ConstExpr (VInt 5)))])
              ; VarDeclare
-                 ( Int
-                 , [ ( IdentVar "y"
-                     , Some (Div (IdentVar "x", ConstExpr (VInt 0))) ) ] )
+                 (Int, [("y", Some (Div (IdentVar "x", ConstExpr (VInt 0))))])
              ; Print (IdentVar "x") ]
          , [(None, None, StatementBlock [Print (ConstExpr (VString "3"))])]
          , None ))
@@ -279,11 +274,10 @@ finally
   = Some
       (Try
          ( StatementBlock
-             [ VarDeclare (Int, [(IdentVar "x", Some (ConstExpr (VInt 5)))])
+             [ VarDeclare (Int, [("x", Some (ConstExpr (VInt 5)))])
              ; VarDeclare
-                 ( Int
-                 , [ ( IdentVar "y"
-                     , Some (Div (IdentVar "x", ConstExpr (VInt 0))) ) ] ) ]
+                 (Int, [("y", Some (Div (IdentVar "x", ConstExpr (VInt 0))))])
+             ]
          , []
          , Some (StatementBlock []) ))
 
@@ -366,8 +360,7 @@ let%test _ =
          , []
          , Some
              (StatementBlock
-                [ VarDeclare
-                    (Int, [(IdentVar "hour", Some (ConstExpr (VInt 23)))])
+                [ VarDeclare (Int, [("hour", Some (ConstExpr (VInt 23)))])
                 ; If
                     ( More (IdentVar "hour", ConstExpr (VInt 22))
                     , StatementBlock [Return None]

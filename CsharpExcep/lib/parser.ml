@@ -164,7 +164,7 @@ module Stat = struct
 
   and parse_var_declare input =
     let helper =
-      get_variable
+      ident_obj
       >>= fun var_name ->
       token "=" >> expr
       >>= (fun var_value -> return (var_name, Some var_value))
