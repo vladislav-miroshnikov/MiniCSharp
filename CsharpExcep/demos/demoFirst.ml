@@ -1,17 +1,11 @@
 open Csharp_lib.Ast
 open Csharp_lib.Parser
 
-let rec print_list : cs_class list -> unit = function
-  | [] -> print_string ""
-  | head :: tl ->
-      print_string (show_cs_class head) ;
-      print_endline "" ;
-      print_list tl
-
-let get_value_list list = match list with Some x -> x | None -> []
+let print_list =
+  Format.pp_print_list Format.pp_print_string Format.std_formatter
 
 let parse_input =
-  get_value_list
+  Option.get
     (apply_parser parser
        {|  class Program
     {
@@ -73,6 +67,4 @@ let parse_input =
         }
     } |})
 
-let testClass =
-  let () = print_list parse_input in
-  ()
+let run_test = print_list (List.map show_cs_class parse_input)

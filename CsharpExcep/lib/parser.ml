@@ -64,15 +64,9 @@ module Expr = struct
     <|> null
 
   let define_type =
-    let check =
-      option ' ' (exactly '[')
-      >>= fun _char ->
-      match _char with '[' -> mzero | _ -> return (Some _char) in
     choice
-      [ token "int" >> check >> return Int
-      ; token "string" >> check >> return String
-      ; token "void" >> check >> return Void
-      ; token "bool" >> check >> return Bool
+      [ token "int" >> return Int; token "string" >> return String
+      ; token "void" >> return Void; token "bool" >> return Bool
       ; (ident_obj >>= fun class_name -> return (CsClass class_name)) ]
 
   let rec expr input = num_expr input
@@ -140,12 +134,11 @@ module Stat = struct
 
   let rec parse_statement input =
     choice
-      [ parse_continue; parse_break; parse_expr; parse_return; parse_if
-      ; parse_while; parse_var_declare; parse_for; parse_throw; parse_stat_block
-      ; parse_print; parse_try ]
+      [ continue; break; parse_expr; return_stat; if_stat; while_stat
+      ; var_declare; for_stat; throw; stat_block; print_func; try_stat ]
       input
 
-  and parse_if input =
+  and if_stat input =
     ( token "if" >> parens expr
     >>= fun condition ->
     parse_statement
@@ -156,13 +149,13 @@ module Stat = struct
         ); return (If (condition, then_stat, None)) ] )
       input
 
-  and parse_while input =
+  and while_stat input =
     ( token "while" >> parens expr
     >>= fun condition ->
     parse_statement >>= fun stat -> return (While (condition, stat)) )
       input
 
-  and parse_var_declare input =
+  and var_declare input =
     let helper =
       ident_obj
       >>= fun var_name ->
@@ -175,12 +168,12 @@ module Stat = struct
     >>= fun var_pair -> token ";" >> return (VarDeclare (var_type, var_pair)) )
       input
 
-  and parse_stat_block input =
+  and stat_block input =
     ( braces (sep_by parse_statement spaces)
     >>= fun stats -> return (StatementBlock stats) )
       input
 
-  and parse_for input =
+  and for_stat input =
     ( token "for" >> token "("
     >> choice
          [ (parse_statement >>= fun stat -> return (Some stat))
@@ -196,12 +189,12 @@ module Stat = struct
     >>= fun body -> return (For (declare, condition, after, body)) )
       input
 
-  and parse_print input =
+  and print_func input =
     ( token "Console.WriteLine(" >> expr
     >>= fun print_expression -> token ");" >> return (Print print_expression) )
       input
 
-  and parse_throw input =
+  and throw input =
     ( token "throw" >> expr
     >>= fun throw_expr -> token ";" >> return (Throw throw_expr) )
       input
@@ -209,24 +202,22 @@ module Stat = struct
   and parse_expr input =
     (expr >>= fun express -> token ";" >> return (Expression express)) input
 
-  and parse_return input =
+  and return_stat input =
     ( token "return"
     >> choice
          [ (expr >>= fun result -> token ";" >> return (Return (Some result)))
          ; token ";" >> return (Return None) ] )
       input
 
-  and parse_continue input =
-    (token "continue" >> token ";" >> return Continue) input
+  and continue input = (token "continue" >> token ";" >> return Continue) input
+  and break input = (token "break" >> token ";" >> return Break) input
 
-  and parse_break input = (token "break" >> token ";" >> return Break) input
-
-  and parse_try input =
-    let parse_filter =
+  and try_stat input =
+    let filter =
       token "when" >> token "(" >> Expr.expr
       >>= (fun filter -> token ")" >> return (Some filter))
       <|> return None in
-    let parse_catch =
+    let catch =
       token "catch"
       (*here are all 6 possible catch cases:
         1 - catch {}
@@ -243,18 +234,18 @@ module Stat = struct
                [ (Expr.get_variable >>= fun name -> return (Some name))
                ; return None ]
              >>= fun var_name ->
-             token ")" >> parse_filter
+             token ")" >> filter
              >>= fun filter ->
              parse_statement
              >>= fun catch_block ->
              return (Some (excep_type, var_name), filter, catch_block) )
-           ; ( parse_filter
+           ; ( filter
              >>= fun filter ->
              parse_statement
              >>= fun catch_block -> return (None, filter, catch_block) ) ] in
     ( token "try" >> parse_statement
     >>= fun try_stat ->
-    many parse_catch
+    many catch
     >>= fun catch_list ->
     match catch_list with
     | [] ->
@@ -271,11 +262,11 @@ module Stat = struct
       input
 end
 
-let parse_params =
+let get_params =
   Expr.define_type
   >>= fun _type -> Expr.get_variable >>= fun name -> return (_type, name)
 
-let parse_field =
+let field =
   let helper =
     Expr.ident_obj
     >>= fun name ->
@@ -290,7 +281,7 @@ let parse_field =
   >>= fun var_list ->
   token ";" >> return (VariableField (modifiers, f_type, var_list))
 
-let parse_method =
+let class_method =
   get_modifier_list
   >>= fun modifiers ->
   Expr.define_type
@@ -298,26 +289,26 @@ let parse_method =
   Expr.ident_obj
   >>= fun method_name ->
   token "("
-  >> sep_by parse_params (token ",")
+  >> sep_by get_params (token ",")
   >>= fun params_list ->
-  token ")" >> Stat.parse_stat_block
+  token ")" >> Stat.stat_block
   >>= fun stat_block ->
   return
     (Method (modifiers, method_type, method_name, params_list, Some stat_block))
 
-let parse_constructor =
+let constructor =
   get_modifier_list
   >>= fun modifiers ->
   Expr.ident_obj
   >>= fun name ->
   token "("
-  >> sep_by parse_params (token ",")
+  >> sep_by get_params (token ",")
   >>= fun params_list ->
-  token ")" >> Stat.parse_stat_block
+  token ")" >> Stat.stat_block
   >>= fun stat_block ->
   return (Constructor (modifiers, name, params_list, stat_block))
 
-let parse_class_elements = parse_field <|> parse_method <|> parse_constructor
+let class_elements = field <|> class_method <|> constructor
 
 let parse_class =
   get_modifier_list
@@ -329,7 +320,7 @@ let parse_class =
     ; return None ]
   >>= fun _parent ->
   token "{"
-  >> sep_by parse_class_elements spaces
+  >> sep_by class_elements spaces
   >>= fun class_elements ->
   token "}" >> return (Class (modifiers, name, _parent, class_elements))
 

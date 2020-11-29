@@ -26,7 +26,6 @@ let%test _ = apply_parser atomic "   true" = Some (ConstExpr (VBool true))
 let%test _ = apply_parser atomic "   false" = Some (ConstExpr (VBool false))
 let%test _ = apply_parser atomic "   null" = Some Null
 let%test _ = apply_parser define_type "  int" = Some Int
-let%test _ = apply_parser define_type "  int[]" = None
 let%test _ = apply_parser define_type "  void" = Some Void
 let%test _ = apply_parser define_type "  string" = Some String
 let%test _ = apply_parser define_type "  Excep" = Some (CsClass "Excep")
@@ -91,11 +90,11 @@ let%test _ =
          , [ ("a", Some (ConstExpr (VInt 0))); ("b", Some (ConstExpr (VInt 1)))
            ; ("c", Some (ConstExpr (VInt 2))) ] ))
 
-let%test _ = apply_parser parse_break "break;" = Some Break
-let%test _ = apply_parser parse_continue "continue;" = Some Continue
+let%test _ = apply_parser break "break;" = Some Break
+let%test _ = apply_parser continue "continue;" = Some Continue
 
 let%test _ =
-  apply_parser parse_return "return 3;"
+  apply_parser return_stat "return 3;"
   = Some (Return (Some (ConstExpr (VInt 3))))
 
 let%test _ =
@@ -334,11 +333,11 @@ let%test _ =
          , None ))
 
 let%test _ =
-  apply_parser parse_field {|  public int sum;|}
+  apply_parser field {|  public int sum;|}
   = Some (VariableField ([Public], Int, [("sum", None)]))
 
 let%test _ =
-  apply_parser parse_method
+  apply_parser class_method
     {| static void SayHello()
 {
     int hour = 23;
@@ -369,8 +368,7 @@ let%test _ =
                     ) ]) ))
 
 let%test _ =
-  apply_parser parse_constructor
-    {| public Person(string n) { name = n; age = 18; }|}
+  apply_parser constructor {| public Person(string n) { name = n; age = 18; }|}
   = Some
       (Constructor
          ( [Public]

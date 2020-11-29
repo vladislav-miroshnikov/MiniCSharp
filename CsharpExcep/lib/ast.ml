@@ -42,7 +42,7 @@ type expr =
 [@@deriving show]
 
 and statement =
-  | For of statement option * expr option * expr list * statement
+  | For of statement option * expr option * expr list * statement (*because you can write for(int i = 0, j = 5; i < 4; i++, j--)*)
   | If of expr * statement * statement option (*statement option is "else"*)
   | While of expr * statement
   | Break
