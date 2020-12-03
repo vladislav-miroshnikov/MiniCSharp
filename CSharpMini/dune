@@ -1,0 +1,8 @@
+(executable
+ (name REPL)
+ (public_name CSharpMini.Repl)
+ (modules REPL)
+ (libraries CSharpMini.Lib))
+
+(cram
+ (deps demos/parserTest.exe))
