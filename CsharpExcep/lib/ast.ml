@@ -63,14 +63,9 @@ and statement =
 [@@deriving show]
 
 and field =
-  | VariableField of modifier list * data_type * (string * expr option) list (*example: static int a = 3, b*)
-  | Method of
-      modifier list
-      * data_type
-      * string
-      * (data_type * expr) list
-      * statement option
-  | Constructor of modifier list * string * (data_type * expr) list * statement
+  | VariableField of data_type * (string * expr option) list (*example: static int a = 3, b*)
+  | Method of data_type * string * (data_type * expr) list * statement option
+  | Constructor of string * (data_type * expr) list * statement
 [@@deriving show]
 
 and cs_class =
@@ -79,5 +74,5 @@ and cs_class =
       * string (*name*)
       * string option
       (*parent class*)
-      * field list
+      * (modifier list * field) list
 [@@deriving show]

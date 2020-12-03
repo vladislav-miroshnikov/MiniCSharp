@@ -333,11 +333,11 @@ let%test _ =
          , None ))
 
 let%test _ =
-  apply_parser field {|  public int sum;|}
-  = Some (VariableField ([Public], Int, [("sum", None)]))
+  apply_parser class_elements {|  public int sum;|}
+  = Some ([Public], VariableField (Int, [("sum", None)]))
 
 let%test _ =
-  apply_parser class_method
+  apply_parser class_elements
     {| static void SayHello()
 {
     int hour = 23;
@@ -352,28 +352,29 @@ let%test _ =
 }
 |}
   = Some
-      (Method
-         ( [Static]
-         , Void
-         , "SayHello"
-         , []
-         , Some
-             (StatementBlock
-                [ VarDeclare (Int, [("hour", Some (ConstExpr (VInt 23)))])
-                ; If
-                    ( More (IdentVar "hour", ConstExpr (VInt 22))
-                    , StatementBlock [Return None]
-                    , Some
-                        (StatementBlock [Print (ConstExpr (VString "Hello"))])
-                    ) ]) ))
+      ( [Static]
+      , Method
+          ( Void
+          , "SayHello"
+          , []
+          , Some
+              (StatementBlock
+                 [ VarDeclare (Int, [("hour", Some (ConstExpr (VInt 23)))])
+                 ; If
+                     ( More (IdentVar "hour", ConstExpr (VInt 22))
+                     , StatementBlock [Return None]
+                     , Some
+                         (StatementBlock [Print (ConstExpr (VString "Hello"))])
+                     ) ]) ) )
 
 let%test _ =
-  apply_parser constructor {| public Person(string n) { name = n; age = 18; }|}
+  apply_parser class_elements
+    {| public Person(string n) { name = n; age = 18; }|}
   = Some
-      (Constructor
-         ( [Public]
-         , "Person"
-         , [(String, IdentVar "n")]
-         , StatementBlock
-             [ Expression (Assign (IdentVar "name", IdentVar "n"))
-             ; Expression (Assign (IdentVar "age", ConstExpr (VInt 18))) ] ))
+      ( [Public]
+      , Constructor
+          ( "Person"
+          , [(String, IdentVar "n")]
+          , StatementBlock
+              [ Expression (Assign (IdentVar "name", IdentVar "n"))
+              ; Expression (Assign (IdentVar "age", ConstExpr (VInt 18))) ] ) )

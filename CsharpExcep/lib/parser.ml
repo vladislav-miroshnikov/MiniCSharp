@@ -273,17 +273,12 @@ let field =
     token "=" >> Expr.expr
     >>= (fun value -> return (name, Some value))
     <|> return (name, None) in
-  get_modifier_list
-  >>= fun modifiers ->
   Expr.define_type
   >>= fun f_type ->
   sep_by helper (token ",")
-  >>= fun var_list ->
-  token ";" >> return (VariableField (modifiers, f_type, var_list))
+  >>= fun var_list -> token ";" >> return (VariableField (f_type, var_list))
 
 let class_method =
-  get_modifier_list
-  >>= fun modifiers ->
   Expr.define_type
   >>= fun method_type ->
   Expr.ident_obj
@@ -293,22 +288,22 @@ let class_method =
   >>= fun params_list ->
   token ")" >> Stat.stat_block
   >>= fun stat_block ->
-  return
-    (Method (modifiers, method_type, method_name, params_list, Some stat_block))
+  return (Method (method_type, method_name, params_list, Some stat_block))
 
 let constructor =
-  get_modifier_list
-  >>= fun modifiers ->
   Expr.ident_obj
   >>= fun name ->
   token "("
   >> sep_by get_params (token ",")
   >>= fun params_list ->
   token ")" >> Stat.stat_block
-  >>= fun stat_block ->
-  return (Constructor (modifiers, name, params_list, stat_block))
+  >>= fun stat_block -> return (Constructor (name, params_list, stat_block))
 
-let class_elements = field <|> class_method <|> constructor
+let class_elements =
+  get_modifier_list
+  >>= fun modifiers ->
+  field <|> class_method <|> constructor
+  >>= fun class_elem -> return (modifiers, class_elem)
 
 let parse_class =
   get_modifier_list
