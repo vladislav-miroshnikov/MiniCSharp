@@ -6,15 +6,18 @@ License: LGPL
 
 Author: Vasy Pupkin, vasya@pupkin.com
 
-Features done:
+Features done (append only):
 
-- 1
-- 2
+- Parser  (for example)
+- interpreter of non-recursive functions (for example)
+- ...
 
-Features in progress:
+Features in progress (and TODOs):
 
-- 1
-- 2
+- Interpreter of recursive functions is not yet ready  (for example)
+- TODO: make pretty-printing less memory consuming (for example)
+- ...
+
 
 ##### Замечания по стилю кодирования
 
@@ -24,6 +27,20 @@ Features in progress:
 - имена типов и функций -- snake_case
 - имена типов модулей и модулей -- CamelCase 
 - ворнинги должны быть пофикшены
+- Не стесняйтесь писать `if ... then ... else` вместо `match ... with true -> .. | false -> ...`
+- Не стесняйтесь писать гварды в мэтчинге, например 
+```
+match .. with 
+| x when f x -> ...
+| x          -> ...
+| ...
+```
+вместо 
+```
+match ... with 
+| x -> if f x then ... else ...
+| ...
+```
 - используйте quoted string literals в тестах, чтобы не экранировать руками 
 ```
 ─( 11:21:01 )─< command 1 >────────────────────────────
