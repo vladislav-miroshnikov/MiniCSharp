@@ -41,6 +41,7 @@ match ... with
 | x -> if f x then ... else ...
 | ...
 ```
+- вместо `fun x y -> match y with` лучше писать короче: `fun x -> function`
 - используйте quoted string literals в тестах, чтобы не экранировать руками 
 ```
 ─( 11:21:01 )─< command 1 >────────────────────────────
