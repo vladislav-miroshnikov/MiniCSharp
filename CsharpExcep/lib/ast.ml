@@ -1,5 +1,5 @@
 type data_type = Int | Bool | CsClass of string | Void | String
-[@@deriving show]
+[@@deriving show {with_path= false}]
 
 type value =
   | VInt of int
@@ -9,9 +9,10 @@ type value =
   | VChar of char
   | VString of string
   | VClass
-[@@deriving show]
+[@@deriving show {with_path= false}]
 
-type modifier = Public | Static | Override | Const [@@deriving show]
+type modifier = Public | Static | Override | Const
+[@@deriving show {with_path= false}]
 
 type expr =
   | Add of expr * expr
@@ -39,7 +40,7 @@ type expr =
   | ClassCreate of string * expr list (*first - name, other - args list*)
   | CallMethod of string * expr list
   | Assign of expr * expr
-[@@deriving show]
+[@@deriving show {with_path= false}]
 
 and statement =
   | For of statement option * expr option * expr list * statement (*because you can write for(int i = 0, j = 5; i < 4; i++, j--)*)
@@ -60,13 +61,13 @@ and statement =
           next expr option is a filter (when (y==0 && x == 0)), statement is the body of catch*)
       * statement option (*it is the finally body*)
   | Print of expr
-[@@deriving show]
+[@@deriving show {with_path= false}]
 
 and field =
   | VariableField of data_type * (string * expr option) list (*example: static int a = 3, b*)
   | Method of data_type * string * (data_type * expr) list * statement option
   | Constructor of string * (data_type * expr) list * statement
-[@@deriving show]
+[@@deriving show {with_path= false}]
 
 and cs_class =
   | Class of
@@ -75,4 +76,4 @@ and cs_class =
       * string option
       (*parent class*)
       * (modifier list * field) list
-[@@deriving show]
+[@@deriving show {with_path= false}]
