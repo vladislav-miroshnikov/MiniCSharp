@@ -1,59 +1,44 @@
   $ (cd ../../../default && demos/demoFirst.exe)
-  Ast.Class
+  Class
   ([], "Program", None,
-   [([Ast.Static],
-     Ast.Method
-     (Ast.Void, "Main", [],
-      Some (Ast.StatementBlock ([Ast.Expression (Ast.CallMethod
-                                                 ("TrickyTest21", []))]))));
-    ([Ast.Public; Ast.Static],
-     Ast.Method
-     (Ast.Bool, "Filter", [(Ast.String, Ast.IdentVar ("msg"))],
-      Some (Ast.StatementBlock ([Ast.Print (Ast.IdentVar ("msg"));
-                                 Ast.Return (Some (Ast.ConstExpr (Ast.VBool (true))))]))));
-    ([Ast.Public; Ast.Static],
-     Ast.Method
-     (Ast.Void, "A21", [],
-      Some (Ast.StatementBlock ([Ast.Try
-                                 (Ast.StatementBlock ([Ast.Throw (Ast.ClassCreate
-                                                                  ("DivideByZeroException",
-                                                                   []))]),
-                                  [],
-                                  Some (Ast.StatementBlock ([Ast.Print (
-                                                              Ast.ConstExpr (
-                                                               Ast.VString ("A21.finally()")));
-                                                             Ast.Throw (
-                                                              Ast.ClassCreate
-                                                              ("NullReferenceException",
-                                                               []))])));
-                                 Ast.Print (Ast.ConstExpr (Ast.VString ("Resuming A2")))]))));
-    ([Ast.Public; Ast.Static],
-     Ast.Method
-     (Ast.Void, "B21", [],
-      Some (Ast.StatementBlock ([Ast.Try
-                                 (Ast.StatementBlock ([Ast.Expression (
-                                                        Ast.CallMethod
-                                                        ("A21", []))]),
-                                  [(Some ((Ast.CsClass ("DivideByZeroException"),
-                                           None)),
-                                    Some (Ast.CallMethod
-                                          ("Filter",
-                                           [Ast.ConstExpr (Ast.VString ("filter B21"))])),
-                                    Ast.StatementBlock ([Ast.Print (Ast.ConstExpr (
-                                                                     Ast.VString ("B21 DivideByZeroException")))]))],
-                                  Some (Ast.StatementBlock ([Ast.Print (
-                                                              Ast.ConstExpr (
-                                                               Ast.VString ("B21.finally()")))])));
-                                 Ast.Print (Ast.ConstExpr (Ast.VString ("Resuming B21")))]))));
-    ([Ast.Public; Ast.Static],
-     Ast.Method
-     (Ast.Void, "TrickyTest21", [],
-      Some (Ast.StatementBlock ([Ast.Try
-                                 (Ast.StatementBlock ([Ast.Expression (
-                                                        Ast.CallMethod
-                                                        ("B21", []))]),
-                                  [],
-                                  Some (Ast.StatementBlock ([Ast.Print (
-                                                              Ast.ConstExpr (
-                                                               Ast.VString ("TrickyTest Finally")))])));
-                                 Ast.Print (Ast.ConstExpr (Ast.VString ("Resuming TrickyTest")))]))))])
+   [([Static],
+     Method
+     (Void, "Main", [],
+      StatementBlock ([Expression (CallMethod ("TrickyTest21", []))])));
+    ([Public; Static],
+     Method
+     (Bool, "Filter", [(String, IdentVar ("msg"))],
+      StatementBlock ([Print (IdentVar ("msg"));
+                       Return (Some (ConstExpr (VBool (true))))])));
+    ([Public; Static],
+     Method
+     (Void, "A21", [],
+      StatementBlock ([Try
+                       (StatementBlock ([Throw (ClassCreate
+                                                ("DivideByZeroException", []))]),
+                        [],
+                        Some (StatementBlock ([Print (ConstExpr (VString ("A21.finally()")));
+                                               Throw (ClassCreate
+                                                      ("NullReferenceException",
+                                                       []))])));
+                       Print (ConstExpr (VString ("Resuming A2")))])));
+    ([Public; Static],
+     Method
+     (Void, "B21", [],
+      StatementBlock ([Try
+                       (StatementBlock ([Expression (CallMethod ("A21", []))]),
+                        [(Some ((CsClass ("DivideByZeroException"), None)),
+                          Some (CallMethod
+                                ("Filter",
+                                 [ConstExpr (VString ("filter B21"))])),
+                          StatementBlock ([Print (ConstExpr (VString ("B21 DivideByZeroException")))]))],
+                        Some (StatementBlock ([Print (ConstExpr (VString ("B21.finally()")))])));
+                       Print (ConstExpr (VString ("Resuming B21")))])));
+    ([Public; Static],
+     Method
+     (Void, "TrickyTest21", [],
+      StatementBlock ([Try
+                       (StatementBlock ([Expression (CallMethod ("B21", []))]),
+                        [],
+                        Some (StatementBlock ([Print (ConstExpr (VString ("TrickyTest Finally")))])));
+                       Print (ConstExpr (VString ("Resuming TrickyTest")))])))])

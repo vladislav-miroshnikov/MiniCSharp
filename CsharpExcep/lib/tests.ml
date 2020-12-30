@@ -357,15 +357,13 @@ let%test _ =
           ( Void
           , "SayHello"
           , []
-          , Some
-              (StatementBlock
-                 [ VarDeclare (Int, [("hour", Some (ConstExpr (VInt 23)))])
-                 ; If
-                     ( More (IdentVar "hour", ConstExpr (VInt 22))
-                     , StatementBlock [Return None]
-                     , Some
-                         (StatementBlock [Print (ConstExpr (VString "Hello"))])
-                     ) ]) ) )
+          , StatementBlock
+              [ VarDeclare (Int, [("hour", Some (ConstExpr (VInt 23)))])
+              ; If
+                  ( More (IdentVar "hour", ConstExpr (VInt 22))
+                  , StatementBlock [Return None]
+                  , Some (StatementBlock [Print (ConstExpr (VString "Hello"))])
+                  ) ] ) )
 
 let%test _ =
   apply_parser class_elements

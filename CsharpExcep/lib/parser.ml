@@ -176,7 +176,7 @@ module Stat = struct
   and for_stat input =
     ( token "for" >> token "("
     >> choice
-         [ (parse_statement >>= fun stat -> return (Some stat))
+         [ (var_declare >>= fun stat -> return (Some stat))
          ; token ";" >> return None ]
     >>= fun declare ->
     choice
@@ -288,7 +288,7 @@ let class_method =
   >>= fun params_list ->
   token ")" >> Stat.stat_block
   >>= fun stat_block ->
-  return (Method (method_type, method_name, params_list, Some stat_block))
+  return (Method (method_type, method_name, params_list, stat_block))
 
 let constructor =
   Expr.ident_obj

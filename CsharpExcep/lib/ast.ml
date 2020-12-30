@@ -65,7 +65,7 @@ and statement =
 
 and field =
   | VariableField of data_type * (string * expr option) list (*example: static int a = 3, b*)
-  | Method of data_type * string * (data_type * expr) list * statement option
+  | Method of data_type * string * (data_type * expr) list * statement
   | Constructor of string * (data_type * expr) list * statement
 [@@deriving show {with_path= false}]
 
