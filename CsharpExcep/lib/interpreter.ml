@@ -44,6 +44,7 @@ type table_field =
 type table_method =
   { method_type: data_type
   ; has_override: bool
+  ; has_static_mod: bool
   ; method_key: table_key
   ; args: (data_type * expr) list
   ; body: statement }
@@ -89,6 +90,7 @@ module ClassLoader (M : MONADERROR) = struct
     let to_string : table_method =
       { method_type= String
       ; has_override= true
+      ; has_static_mod= false
       ; method_key= "ToString"
       ; args= []
       ; body=
@@ -150,7 +152,8 @@ module ClassLoader (M : MONADERROR) = struct
           return ()
       | Method (_, "Main", _, _) ->
           error "Only one main method can be in program!"
-      | Method (_, _, _, _) when is_static l -> error "Method can not be static"
+      (* | Method (_, _, _, _) when is_static l ->
+          error "Method can not be static" CHECK!!!!! *)
       | Method (_, _, _, _) when is_const l -> error "Method can not be const"
       | Method (_, _, _, _) -> return ()
       | VariableField (_, _) when (not (is_static l)) && not (is_override l) ->
@@ -180,63 +183,6 @@ module ClassLoader (M : MONADERROR) = struct
 
   let type_of_list = List.map fst
 
-  let add_class_table hashtable adding_class =
-    match adding_class with
-    | Class (_, class_key, parent, fields) ->
-        let method_table = Hashtbl.create 1024 in
-        let field_table = Hashtbl.create 1024 in
-        let constructor_table = Hashtbl.create 1024 in
-        class_modifiers_check adding_class
-        >>
-        let add_class_elem : modifier list * field -> unit M.t =
-         fun field_elem ->
-          match field_elem with
-          | mod_list, VariableField (field_type, arg_list) ->
-              let rec add_var_field = function
-                | [] -> return ()
-                | (field_key, sub_tree) :: ps ->
-                    let is_mutable = is_const mod_list in
-                    add_to_table field_table field_key
-                      {field_type; field_key; is_mutable; sub_tree}
-                      "Similar fields"
-                    >> add_var_field ps in
-              field_modifiers_check field_elem >> add_var_field arg_list
-          | mod_list, Method (method_type, m_name, args, body) ->
-              let method_key =
-                String.concat ""
-                  (m_name :: List.map show_data_type (type_of_list args)) in
-              let has_override = is_override mod_list in
-              field_modifiers_check field_elem
-              >> add_to_table method_table method_key
-                   {method_type; has_override; method_key; args; body}
-                   "Method with this type exists"
-              >> return ()
-          | _, Constructor (name, args, body) ->
-              let make_key =
-                String.concat ""
-                  (name :: List.map show_data_type (type_of_list args)) in
-              let check_name =
-                if name = class_key then return ()
-                else error "Constructor name error" in
-              check_name
-              >> field_modifiers_check field_elem
-              >> add_to_table constructor_table make_key {args; body}
-                   "Constructor with this type exists"
-              >> return () in
-        let add_parent p = match p with None -> None | _ -> p in
-        (*CHECK!!!!!!!*)
-        let parent_key = add_parent parent in
-        monadic_list_iter fields add_class_elem ()
-        >> add_to_table hashtable class_key
-             { class_key
-             ; field_table
-             ; method_table
-             ; constructor_table
-             ; parent_key
-             ; children_keys= []
-             ; dec_tree= adding_class }
-             "Similar Classes"
-
   let add_default_constructor hashtable =
     Hashtbl.iter
       (fun key some_class ->
@@ -247,6 +193,69 @@ module ClassLoader (M : MONADERROR) = struct
     return hashtable
 
   let class_adding class_list hastable =
+    let add_class_table hashtable adding_class =
+      match adding_class with
+      | Class (_, class_key, parent, fields) ->
+          let method_table = Hashtbl.create 1024 in
+          let field_table = Hashtbl.create 1024 in
+          let constructor_table = Hashtbl.create 1024 in
+          class_modifiers_check adding_class
+          >>
+          let add_class_elem : modifier list * field -> unit M.t =
+           fun field_elem ->
+            match field_elem with
+            | mod_list, VariableField (field_type, arg_list) ->
+                let rec add_var_field = function
+                  | [] -> return ()
+                  | (field_key, sub_tree) :: ps ->
+                      let is_mutable = is_const mod_list in
+                      add_to_table field_table field_key
+                        {field_type; field_key; is_mutable; sub_tree}
+                        "Similar fields"
+                      >> add_var_field ps in
+                field_modifiers_check field_elem >> add_var_field arg_list
+            | mod_list, Method (method_type, m_name, args, body) ->
+                let method_key =
+                  String.concat ""
+                    (m_name :: List.map show_data_type (type_of_list args))
+                in
+                let has_override = is_override mod_list in
+                let has_static_mod = is_static mod_list in
+                field_modifiers_check field_elem
+                >> add_to_table method_table method_key
+                     { method_type
+                     ; has_override
+                     ; has_static_mod
+                     ; method_key
+                     ; args
+                     ; body }
+                     "Method with this type exists"
+                >> return ()
+            | _, Constructor (name, args, body) ->
+                let make_key =
+                  String.concat ""
+                    (name :: List.map show_data_type (type_of_list args)) in
+                let check_name =
+                  if name = class_key then return ()
+                  else error "Constructor name error" in
+                check_name
+                >> field_modifiers_check field_elem
+                >> add_to_table constructor_table make_key {args; body}
+                     "Constructor with this type exists"
+                >> return () in
+          let add_parent p = match p with None -> None | _ -> p in
+          (*CHECK!!!!!!!*)
+          let parent_key = add_parent parent in
+          monadic_list_iter fields add_class_elem ()
+          >> add_to_table hashtable class_key
+               { class_key
+               ; field_table
+               ; method_table
+               ; constructor_table
+               ; parent_key
+               ; children_keys= []
+               ; dec_tree= adding_class }
+               "Similar Classes" in
     monadic_list_iter class_list (add_class_table hastable) hastable
 
   let update_exception_class_childs hashtable =
@@ -271,30 +280,68 @@ module ClassLoader (M : MONADERROR) = struct
           ) in
     monadic_list_iter (convert_table_to_list hashtable) helper hashtable
 
-  let exception_transfer_field : table_class -> table_field -> unit t =
-   fun child_class p_field ->
-    match get_value_option child_class.field_table p_field.field_key with
-    | None ->
-        return (Hashtbl.add child_class.field_table p_field.field_key p_field)
-    | _ -> return ()
-
   let transfer_fields parent children =
+    let exception_transfer_field : table_class -> table_field -> unit t =
+     fun child_class p_field ->
+      match get_value_option child_class.field_table p_field.field_key with
+      | None ->
+          return (Hashtbl.add child_class.field_table p_field.field_key p_field)
+      | _ -> return () in
     monadic_list_iter
       (convert_table_to_list parent.field_table)
       (exception_transfer_field children)
       ()
 
-  let exception_transfer_method : table_class -> table_method -> unit t =
-   fun child_class p_method ->
-    match get_value_option child_class.method_table p_method.method_key with
-    | None ->
-        return
-          (Hashtbl.add child_class.method_table p_method.method_key p_method)
-    | _ -> return ()
-
   let transfer_methods parent children =
+    let exception_transfer_method : table_class -> table_method -> unit t =
+     fun child_class p_method ->
+      match get_value_option child_class.method_table p_method.method_key with
+      | None ->
+          return
+            (Hashtbl.add child_class.method_table p_method.method_key p_method)
+      | _ -> return () in
     monadic_list_iter
       (convert_table_to_list parent.method_table)
       (exception_transfer_method children)
       ()
+
+  let check_override_mod parent children =
+    let check : table_class -> table_method -> unit t =
+     fun parent child_method ->
+      match child_method.has_override with
+      | false -> return ()
+      | true -> (
+        match get_value_option parent.method_table child_method.method_key with
+        | None ->
+            error "Not overriden method or parent does not exist this method!"
+        | _ -> return () ) in
+    monadic_list_iter
+      (convert_table_to_list children.method_table)
+      (check parent) ()
+
+  let transfer_to_child : table_class -> table_class -> unit t =
+   fun parent children ->
+    transfer_fields parent children
+    >> transfer_methods parent children
+    >> check_override_mod parent children
+
+  let begin_inheritance_from_exception hashtable =
+    let exception_class = Option.get (get_value_option hashtable "Exception") in
+    let helper child_key =
+      transfer_to_child exception_class
+        (Option.get (get_value_option hashtable child_key)) in
+    monadic_list_iter exception_class.children_keys helper hashtable
+
+  let load_classes class_list =
+    match class_list with
+    | [] -> error "No class found, you may have submitted an empty file"
+    | _ ->
+        system_exception_init class_table
+        >>= fun table ->
+        class_adding class_list table
+        >>= fun table_with_classes ->
+        add_default_constructor table_with_classes
+        >>= fun table_update ->
+        update_exception_class_childs table_update
+        >>= fun new_table -> begin_inheritance_from_exception new_table
 end
