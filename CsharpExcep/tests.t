@@ -3,42 +3,64 @@
   ([], "Program", None,
    [([Static],
      Method
-     (Void, "Main", [],
-      StatementBlock ([Expression (CallMethod ("TrickyTest21", []))])));
+     (Void, "Main", [], StatementBlock ([Expression (CallMethod ("E3", []))])));
     ([Public; Static],
      Method
-     (Bool, "Filter", [(String, IdentVar ("msg"))],
-      StatementBlock ([Print (IdentVar ("msg"));
-                       Return (Some (ConstExpr (VBool (true))))])));
+     (Void, "A3", [],
+      StatementBlock ([VarDeclare (Int, [("x", Some (ConstExpr (VInt (0))))]);
+                       Try
+                       (StatementBlock ([Throw (ClassCreate ("ShittyExn", []))]),
+                        [], Some (StatementBlock ([Print (IdentVar ("x"))])))])));
     ([Public; Static],
      Method
-     (Void, "A21", [],
+     (Void, "B3", [],
       StatementBlock ([Try
-                       (StatementBlock ([Throw (ClassCreate
-                                                ("DivideByZeroException", []))]),
-                        [],
-                        Some (StatementBlock ([Print (ConstExpr (VString ("A21.finally()")));
-                                               Throw (ClassCreate
-                                                      ("NullReferenceException",
-                                                       []))])));
-                       Print (ConstExpr (VString ("Resuming A2")))])));
+                       (StatementBlock ([Expression (CallMethod ("A3", []))]),
+                        [(Some ((CsClass ("ShittyExn"), Some (IdentVar ("e")))),
+                          Some (Access
+                                (IdentVar ("e"), CallMethod ("Filter", []))),
+                          StatementBlock ([Print (ConstExpr (VString ("B")))]))],
+                        None)])));
     ([Public; Static],
      Method
-     (Void, "B21", [],
+     (Void, "C3", [],
       StatementBlock ([Try
-                       (StatementBlock ([Expression (CallMethod ("A21", []))]),
-                        [(Some ((CsClass ("DivideByZeroException"), None)),
-                          Some (CallMethod
-                                ("Filter",
-                                 [ConstExpr (VString ("filter B21"))])),
-                          StatementBlock ([Print (ConstExpr (VString ("B21 DivideByZeroException")))]))],
-                        Some (StatementBlock ([Print (ConstExpr (VString ("B21.finally()")))])));
-                       Print (ConstExpr (VString ("Resuming B21")))])));
+                       (StatementBlock ([Expression (CallMethod ("B3", []))]),
+                        [(Some ((CsClass ("ShittyExn"), Some (IdentVar ("e")))),
+                          Some (Access
+                                (IdentVar ("e"), CallMethod ("Filter", []))),
+                          StatementBlock ([Print (ConstExpr (VString ("C")))]))],
+                        None)])));
     ([Public; Static],
      Method
-     (Void, "TrickyTest21", [],
+     (Void, "D3", [],
       StatementBlock ([Try
-                       (StatementBlock ([Expression (CallMethod ("B21", []))]),
-                        [],
-                        Some (StatementBlock ([Print (ConstExpr (VString ("TrickyTest Finally")))])));
-                       Print (ConstExpr (VString ("Resuming TrickyTest")))])))])
+                       (StatementBlock ([Expression (CallMethod ("C3", []))]),
+                        [(Some ((CsClass ("ShittyExn"), Some (IdentVar ("e")))),
+                          Some (Access
+                                (IdentVar ("e"), CallMethod ("Filter", []))),
+                          StatementBlock ([Print (ConstExpr (VString ("D")))]))],
+                        None)])));
+    ([Public; Static],
+     Method
+     (Void, "E3", [],
+      StatementBlock ([Try
+                       (StatementBlock ([Expression (CallMethod ("D3", []))]),
+                        [(Some ((CsClass ("ShittyExn"), Some (IdentVar ("e")))),
+                          Some (Access
+                                (IdentVar ("e"), CallMethod ("Filter", []))),
+                          StatementBlock ([Print (ConstExpr (VString ("E")))]))],
+                        None)])))])
+  Class
+  ([], "ShittyExn", Some ("Exception"),
+   [([Public],
+     Constructor
+     ("ShittyExn", [],
+      StatementBlock ([Expression (Assign (IdentVar ("f"), IdentVar ("f")))])));
+    ([Public],
+     Method
+     (Bool, "Filter", [],
+      StatementBlock ([Return (Some (CallMethod ("f", [])))])))])
+ 
+  $ (cd ../../../default && demos/demoLoad.exe)
+ 

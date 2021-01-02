@@ -8,8 +8,22 @@ type value =
   | VNull
   | VChar of char
   | VString of string
-  | VClass
+  | VClass of obj_ref
 [@@deriving show {with_path= false}]
+
+and field_ref =
+  { key: string
+  ; f_type: data_type
+  ; f_value: value
+  ; is_mutable: bool
+  ; assignment_count: int }
+
+and obj_ref =
+  | ObjNull
+  | ObjRef of
+      { class_key: string
+      ; class_table: (string, field_ref) Hashtbl_der.t
+      ; number: int }
 
 type modifier = Public | Static | Override | Const
 [@@deriving show {with_path= false}]

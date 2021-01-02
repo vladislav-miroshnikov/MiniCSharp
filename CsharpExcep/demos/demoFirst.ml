@@ -7,64 +7,87 @@ let print_list =
 let parse_input =
   Option.get
     (apply_parser parser
-       {|  class Program
+       {|  
+    class Program
     {
         static void Main()
         {
-            TrickyTest21();
+            E3();
         }
 
-       public static bool Filter(string msg)
-       	{
-	        Console.WriteLine(msg);
-            return true;
-      	}
-
-       public static void A21()
+        public static void A3()
         {
+            int x = 0;
             try
             {
-                throw new DivideByZeroException();
+                throw new ShittyExn();
             }
             finally
             {
-                Console.WriteLine("A21.finally()");
-                throw new NullReferenceException();
+                Console.WriteLine(x);
             }
-            Console.WriteLine("Resuming A2");
         }
 
-        public static void B21()
+        public static void B3()
         {
             try
             {
-                A21();
+                A3();
             }
-            catch (DivideByZeroException) when (Filter("filter B21"))
+            catch (ShittyExn e) when (e.Filter())
             {
-                Console.WriteLine("B21 DivideByZeroException");
+                Console.WriteLine("B");
             }
-            finally
-            {
-                Console.WriteLine("B21.finally()");
-            }
-
-            Console.WriteLine("Resuming B21");
         }
-
-        public static void TrickyTest21()
+        public static void C3()
         {
             try
             {
-                B21();
+                B3();
             }
-            finally
+            catch (ShittyExn e) when (e.Filter())
             {
-                Console.WriteLine("TrickyTest Finally");
+                Console.WriteLine("C");
+            }
+        }
+        public static void D3()
+        {
+            try
+            {
+                C3();
+            }
+            catch (ShittyExn e) when (e.Filter())
+            {
+                Console.WriteLine("D");
+            }
+        }
+        public static void E3()
+        {
+            try
+            {
+                D3();
+            }
+            catch (ShittyExn e) when (e.Filter())
+            {
+                Console.WriteLine("E");
+            }
+        }
+
+    }
+                class ShittyExn : Exception
+        {
+            
+            public ShittyExn()
+            {
+                f = f;
             }
 
-            Console.WriteLine("Resuming TrickyTest");
+            public bool Filter()
+            {
+                return f();
+            }
         }
-    } |})
+       
+     |})
 
 let run_test = print_list (List.map show_cs_class parse_input)

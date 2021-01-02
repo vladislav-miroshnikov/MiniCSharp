@@ -146,9 +146,7 @@ module ClassLoader (M : MONADERROR) = struct
     | l, f -> (
       match f with
       | Method (Void, "Main", [], _)
-        when is_static l && is_public l
-             && (not (is_const l))
-             && not (is_override l) ->
+        when is_static l && (not (is_const l)) && not (is_override l) ->
           return ()
       | Method (_, "Main", _, _) ->
           error "Only one main method can be in program!"
@@ -174,13 +172,6 @@ module ClassLoader (M : MONADERROR) = struct
         return ()
     | Class (_, _, _, _) -> error "Wrong class modifiers"
 
-  let add_to_table hashtable key value message =
-    match get_value_option hashtable key with
-    | None ->
-        Hashtbl.add hashtable key value ;
-        return hashtable
-    | _ -> error message
-
   let type_of_list = List.map fst
 
   let add_default_constructor hashtable =
@@ -193,6 +184,12 @@ module ClassLoader (M : MONADERROR) = struct
     return hashtable
 
   let class_adding class_list hastable =
+    let add_to_table hashtable key value message =
+      match get_value_option hashtable key with
+      | None ->
+          Hashtbl.add hashtable key value ;
+          return hashtable
+      | _ -> error message in
     let add_class_table hashtable adding_class =
       match adding_class with
       | Class (_, class_key, parent, fields) ->
@@ -208,7 +205,7 @@ module ClassLoader (M : MONADERROR) = struct
                 let rec add_var_field = function
                   | [] -> return ()
                   | (field_key, sub_tree) :: ps ->
-                      let is_mutable = is_const mod_list in
+                      let is_mutable = not (is_const mod_list) in
                       add_to_table field_table field_key
                         {field_type; field_key; is_mutable; sub_tree}
                         "Similar fields"
@@ -334,7 +331,10 @@ module ClassLoader (M : MONADERROR) = struct
 
   let load_classes class_list =
     match class_list with
-    | [] -> error "No class found, you may have submitted an empty file"
+    | [] ->
+        error
+          "No class found, you may have submitted an empty file or it's syntax \
+           error in input"
     | _ ->
         system_exception_init class_table
         >>= fun table ->
@@ -344,4 +344,281 @@ module ClassLoader (M : MONADERROR) = struct
         >>= fun table_update ->
         update_exception_class_childs table_update
         >>= fun new_table -> begin_inheritance_from_exception new_table
+end
+
+module Interpreter (M : MONADERROR) = struct
+  open M
+
+  type variable =
+    { var_key: table_key
+    ; var_type: data_type
+    ; var_value: value
+    ; is_mutable: bool
+    ; assignment_count: int
+    ; visibility_level: int }
+  [@@deriving show {with_path= false}]
+
+  type context =
+    { current_o: obj_ref
+    ; variable_table: (table_key, variable) Hashtbl_der.t
+    ; current_meth_type: data_type
+    ; last_expr_result: value option
+    ; was_break: bool
+    ; was_return: bool
+    ; was_continue: bool
+    ; is_main: bool
+    ; is_constructor: bool
+    ; count_of_cycle: int
+    ; visibility_level: int
+    ; main_ctx: context option
+    ; count_of_obj: int }
+
+  let sharp_stack = Stack.create
+
+  let context_init current_o variable_table =
+    return
+      { current_o
+      ; variable_table
+      ; current_meth_type= Void
+      ; last_expr_result= None
+      ; was_break= false
+      ; was_return= false
+      ; was_continue= false
+      ; is_main= true
+      ; is_constructor= false
+      ; count_of_cycle= 0
+      ; visibility_level= 0
+      ; main_ctx= None
+      ; count_of_obj= 0 }
+
+  let get_main_ctx ctx =
+    match ctx.main_ctx with None -> ctx | Some main_ctx -> main_ctx
+
+  let get_obj_num = function
+    | ObjNull -> error "NullPointerException"
+    | ObjRef {class_key= _; class_table= _; number= n} -> return n
+
+  let find_main_class hashtable =
+    List.find
+      (fun elem -> Hashtbl.mem elem.method_table "Main")
+      (convert_table_to_list hashtable)
+    |> fun main_class -> return main_class
+
+  let rec expression_check : expr -> context -> data_type M.t =
+   fun cur_expr ctx ->
+    match cur_expr with
+    | Add (left, right) -> (
+        expression_check left ctx
+        >>= fun left_type ->
+        match left_type with
+        | Int -> (
+            expression_check right ctx
+            >>= fun right_type ->
+            match right_type with
+            | Int -> return Int
+            | String ->
+                return String (*because we can write this: string a = 3 + "b";*)
+            | _ -> error "Incorrect type: it must be Int or String!" )
+        | String -> (
+            expression_check right ctx
+            >>= fun right_type ->
+            match right_type with
+            | Int | String -> return String
+            | _ -> error "Incorrect type: it must be Int or String!" )
+        | _ -> error "Incorrect type: it must be Int or String!" )
+    | Sub (left, right)
+     |Div (left, right)
+     |Mod (left, right)
+     |Mul (left, right) -> (
+        expression_check left ctx
+        >>= fun left_type ->
+        match left_type with
+        | Int -> (
+            expression_check right ctx
+            >>= fun right_type ->
+            match right_type with
+            | Int -> return Int
+            | _ -> error "Incorrect type: it must be Int!" )
+        | _ -> error "Incorrect type: it must be Int!" )
+    | PostDec value | PostInc value | PrefDec value | PrefInc value -> (
+        expression_check value ctx
+        >>= fun value_type ->
+        match value_type with
+        | Int -> return Int
+        | _ -> error "Incorrect type: it must be Int!" )
+    | And (left, right) | Or (left, right) -> (
+        expression_check left ctx
+        >>= fun left_type ->
+        match left_type with
+        | Bool -> (
+            expression_check right ctx
+            >>= fun right_type ->
+            match right_type with
+            | Bool -> return Bool
+            | _ -> error "Incorrect type: it must be Bool!" )
+        | _ -> error "Incorrect type: it must be Bool!" )
+    | Not value -> (
+        expression_check value ctx
+        >>= fun value_type ->
+        match value_type with
+        | Bool -> return Bool
+        | _ -> error "Incorrect type: it must be Bool!" )
+    | Less (left, right)
+     |More (left, right)
+     |LessOrEqual (left, right)
+     |MoreOrEqual (left, right) -> (
+        expression_check left ctx
+        >>= fun left_type ->
+        match left_type with
+        | Int -> (
+            expression_check right ctx
+            >>= fun right_type ->
+            match right_type with
+            | Int -> return Bool
+            | _ -> error "Incorrect type: it must be Int!" )
+        | _ -> error "Incorrect type: it must be Int!" )
+    | Equal (left, right) | NotEqual (left, right) -> (
+        expression_check left ctx
+        >>= fun left_type ->
+        match left_type with
+        | Int -> (
+            expression_check right ctx
+            >>= fun right_type ->
+            match right_type with
+            | Int -> return Bool
+            | _ -> error "Incorrect type: it must be Int!" )
+        | String -> (
+            expression_check right ctx
+            >>= fun right_type ->
+            match right_type with
+            | String -> return Bool
+            | _ -> error "Incorrect type: it must be String!" )
+        | Bool -> (
+            expression_check right ctx
+            >>= fun right_type ->
+            match right_type with
+            | Bool -> return Bool
+            | _ -> error "Incorrect type: it must be Bool!" )
+        | CsClass left_name -> (
+            expression_check right ctx
+            >>= fun right_type ->
+            match right_type with
+            | CsClass right_name when left_name = right_name -> return Bool
+            | CsClass "null" -> return Bool
+            | _ -> error "Incorrect class type!" )
+        | _ -> error "Incorrect type in equal-expression!" )
+    | Null -> return (CsClass "null")
+    | CallMethod (method_name, args) ->
+        let obj_key =
+          match ctx.current_o with
+          | ObjNull -> "null"
+          | ObjRef {class_key= key; class_table= _; number= _} -> key in
+        method_verify
+          (Option.get (get_value_option class_table obj_key))
+          method_name args ctx
+        >>= fun t_mth -> return t_mth.method_type
+    | Access (calling_obj, IdentVar var_name) -> (
+        expression_check calling_obj ctx
+        >>= fun obj_type ->
+        match obj_type with
+        | CsClass "null" -> error "NullReferenceException"
+        | CsClass obj_key -> (
+            let find_field =
+              get_value_option
+                (Option.get (get_value_option class_table obj_key)).field_table
+                var_name in
+            match find_field with
+            | None -> error "No matching field found"
+            | Some found_field -> return found_field.field_type )
+        | _ -> error "Invalid type: type must be reference" )
+    | Access (calling_obj, CallMethod (m_name, args)) -> (
+        expression_check calling_obj ctx
+        >>= fun obj_type ->
+        match obj_type with
+        | CsClass "null" -> error "NullReferenceException"
+        | CsClass obj_key ->
+            method_verify
+              (Option.get (get_value_option class_table obj_key))
+              m_name args ctx
+            >>= fun found_mth -> return found_mth.method_type
+        | _ -> error "Invalid type: type must be reference" )
+    | ClassCreate (class_name, args) -> (
+      match get_value_option class_table class_name with
+      | None -> error "Class not found"
+      | Some t_class -> (
+        match args with
+        | [] -> return (CsClass class_name)
+        | _ ->
+            (*constructor_verify t_class args ctx >>*)
+            return (CsClass class_name) ) )
+    | IdentVar var_key -> (
+        let find_variable = get_value_option ctx.variable_table var_key in
+        match find_variable with
+        | None -> (
+          match ctx.current_o with
+          | ObjRef {class_key= _; class_table= table; number= _} -> (
+            match get_value_option table var_key with
+            | None -> error "There is no such variable or field with that name!"
+            | Some field -> return field.f_type )
+          | ObjNull -> error "NullReferenceException" )
+        | Some variable -> return variable.var_type )
+    | ConstExpr value -> (
+      match value with
+      | VInt _ -> return Int
+      | VBool _ -> return Bool
+      | VString _ -> return String
+      | VClass ObjNull -> return (CsClass "null")
+      | VClass (ObjRef {class_key= key; _}) -> return (CsClass key)
+      | _ -> error "Incorrect const expression type!" )
+    | _ -> raise Not_found
+
+  and method_verify :
+      table_class -> table_key -> expr list -> context -> table_method M.t =
+   fun t_class method_name args g_ctx ->
+    let check_argument_type :
+        int -> data_type -> table_key -> table_method -> bool =
+     fun position curr_type _ value ->
+      match List.nth_opt value.args position with
+      | None -> false
+      | Some (t_type, _) -> (
+        match curr_type with
+        | CsClass "null" -> (
+          match t_type with CsClass _ -> true | _ -> false )
+        | _ -> t_type = curr_type ) in
+    let rec helper hashtable position expr_list ctx acc =
+      match Hashtbl.length hashtable with
+      | 0 -> error "The required method was not found"
+      | other -> (
+        match expr_list with
+        | [] -> (
+          match other with
+          | 1 -> (
+              let m_key = method_name ^ acc in
+              match get_value_option t_class.method_table m_key with
+              | None -> error "The required method was not found"
+              | Some t_method -> return t_method )
+          | _ -> error "Couldn't recognize the method" )
+        | el :: ot ->
+            expression_check el ctx
+            >>= fun el_type ->
+            helper
+              (Hashtbl_der.filter hashtable
+                 (check_argument_type position el_type))
+              (position + 1) ot ctx
+              (acc ^ show_data_type el_type) ) in
+    helper
+      (Hashtbl_der.filter t_class.method_table (fun _ t_method ->
+           List.length t_method.args = List.length args))
+      0 args g_ctx ""
+
+  and assign_verify left_key right_key =
+    (*For subtype polymorphism (inclusion polymorphism)*)
+    let rec check_parent key =
+      let find_class = Option.get (get_value_option class_table key) in
+      if find_class.class_key = left_key then return (CsClass right_key)
+      else
+        match find_class.parent_key with
+        | None -> error "Incorrect assign type"
+        | Some parent_key -> check_parent parent_key in
+    check_parent right_key
 end
