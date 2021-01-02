@@ -61,6 +61,3 @@
      Method
      (Bool, "Filter", [],
       StatementBlock ([Return (Some (CallMethod ("f", [])))])))])
- 
-  $ (cd ../../../default && demos/demoLoad.exe)
- 
