@@ -695,4 +695,54 @@ module Interpreter (M : MONADERROR) = struct
       (Hashtbl_der.filter t_class.method_table (fun _ mr ->
            List.length mr.args = List.length args))
       0 args g_ctx
+
+  let get_int_value = function VInt x -> x | _ -> 0
+  let get_string_value = function VString s -> s | _ -> ""
+  let get_bool_value = function VBool b -> b | _ -> false
+  let get_obj_value = function VClass o -> o | _ -> ObjNull
+
+  let make_list_of_elem el size =
+    let rec helper acc curr =
+      match curr with 0 -> acc | x -> helper (el :: acc) (x - 1) in
+    helper [] size
+
+  let inc_visibility_level ctx =
+    {ctx with visibility_level= ctx.visibility_level + 1}
+
+  let dec_visibility_level ctx =
+    {ctx with visibility_level= ctx.visibility_level - 1}
+
+  let rec interprete_stat : statement -> context -> context M.t =
+   fun stat input_ctx ->
+    match stat with
+    | StatementBlock stat_list ->
+        let rec eval_stat : statement list -> context -> context M.t =
+         fun es_list e_ctx ->
+          match es_list with
+          | [] -> return e_ctx
+          | st :: tail -> (
+            match st with
+            | (Break | Continue | Return _) when tail <> [] ->
+                error "Unreachable code"
+            | _ when e_ctx.count_of_cycle >= 1 && e_ctx.was_break ->
+                return e_ctx
+            | _ when e_ctx.count_of_cycle >= 1 && e_ctx.was_continue ->
+                return e_ctx
+            | _ when e_ctx.was_return -> return e_ctx
+            | _ ->
+                interprete_stat st e_ctx
+                >>= fun head_ctx -> eval_stat tail head_ctx ) in
+        let delete_var_visibility : context -> context M.t =
+         fun ctx ->
+          let delete : table_key -> variable -> unit =
+           fun key element ->
+            if element.visibility_level <> ctx.visibility_level then
+              Hashtbl.remove ctx.variable_table key in
+          Hashtbl.iter delete ctx.variable_table ;
+          return ctx in
+        eval_stat stat_list input_ctx
+        >>= fun new_ctx ->
+        if new_ctx.is_main then return new_ctx
+        else delete_var_visibility new_ctx
+    | _ -> raise Not_found
 end
