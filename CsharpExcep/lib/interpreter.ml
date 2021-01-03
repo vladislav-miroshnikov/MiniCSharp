@@ -375,7 +375,8 @@ module Interpreter (M : MONADERROR) = struct
     ; count_of_cycle: int
     ; visibility_level: int
     ; main_ctx: context option
-    ; count_of_obj: int }
+    ; count_of_obj: int
+    ; is_creation: bool }
 
   let sharp_stack = Stack.create
 
@@ -393,7 +394,8 @@ module Interpreter (M : MONADERROR) = struct
       ; count_of_cycle= 0
       ; visibility_level= 0
       ; main_ctx= None
-      ; count_of_obj= 0 }
+      ; count_of_obj= 0
+      ; is_creation= false }
 
   let get_main_ctx ctx =
     match ctx.main_ctx with None -> ctx | Some main_ctx -> main_ctx
@@ -553,8 +555,8 @@ module Interpreter (M : MONADERROR) = struct
         match args with
         | [] -> return (CsClass class_name)
         | _ ->
-            (*constructor_verify t_class args ctx >>*)
-            return (CsClass class_name) ) )
+            constructor_verify t_class args ctx >> return (CsClass class_name) )
+      )
     | IdentVar var_key -> (
         let find_variable = get_value_option ctx.variable_table var_key in
         match find_variable with
@@ -574,55 +576,123 @@ module Interpreter (M : MONADERROR) = struct
       | VClass ObjNull -> return (CsClass "null")
       | VClass (ObjRef {class_key= key; _}) -> return (CsClass key)
       | _ -> error "Incorrect const expression type!" )
-    | _ -> raise Not_found
+    | Assign (left, right) -> (
+        expression_check left ctx
+        >>= fun left_type ->
+        match left_type with
+        | Void -> error "Can not assign to void"
+        | CsClass left_key -> (
+            expression_check right ctx
+            >>= fun right_type ->
+            match right_type with
+            | CsClass "null" -> return (CsClass left_key)
+            | CsClass right_key -> assign_verify_polymorphic left_key right_key
+            | _ -> error "Incorrect type assigning!" )
+        | _ ->
+            expression_check right ctx
+            >>= fun right_type ->
+            if left_type = right_type then return right_type
+            else error "Incorrect type assigning!" )
+    | _ -> error "Incorrect expression"
 
-  and method_verify :
-      table_class -> table_key -> expr list -> context -> table_method M.t =
-   fun t_class method_name args g_ctx ->
-    let check_argument_type :
-        int -> data_type -> table_key -> table_method -> bool =
+  and assign_verify_polymorphic left_key right_key =
+    (*For subtype polymorphism (inclusion polymorphism)*)
+    match classname_verify_polymorphic left_key right_key with
+    | false -> error "Incorrect assign type"
+    | true -> return (CsClass right_key)
+
+  (*copy-paste*)
+  (* let rec check_parent key =
+       let find_class = Option.get (get_value_option class_table key) in
+       if find_class.class_key = left_key then return (CsClass right_key)
+       else
+         match find_class.parent_key with
+         | None -> error "Incorrect assign type"
+         | Some parent_key -> check_parent parent_key in
+     check_parent right_key *)
+  and constructor_verify t_class args g_ctx =
+    let check_type : int -> data_type -> table_key -> table_constructor -> bool
+        =
      fun position curr_type _ value ->
       match List.nth_opt value.args position with
       | None -> false
-      | Some (t_type, _) -> (
+      | Some (f_type, _) -> (
         match curr_type with
         | CsClass "null" -> (
-          match t_type with CsClass _ -> true | _ -> false )
-        | _ -> t_type = curr_type ) in
-    let rec helper hashtable position expr_list ctx acc =
+          match f_type with CsClass _ -> true | _ -> false )
+        | CsClass cl_key -> (
+          match f_type with
+          | CsClass this_key -> classname_verify_polymorphic this_key cl_key
+          | _ -> false )
+        | _ -> f_type = curr_type ) in
+    let rec helper hashtable pos expr_list ctx =
       match Hashtbl.length hashtable with
-      | 0 -> error "The required method was not found"
+      | 0 -> error "Constructor not found"
       | other -> (
         match expr_list with
         | [] -> (
           match other with
-          | 1 -> (
-              let m_key = method_name ^ acc in
-              match get_value_option t_class.method_table m_key with
-              | None -> error "The required method was not found"
-              | Some t_method -> return t_method )
-          | _ -> error "Couldn't recognize the method" )
-        | el :: ot ->
-            expression_check el ctx
-            >>= fun el_type ->
+          | 1 -> return (List.hd (convert_table_to_list hashtable))
+          | _ -> error "Constructor not recognized" )
+        | x :: xs ->
+            expression_check x ctx
+            >>= fun x_type ->
             helper
-              (Hashtbl_der.filter hashtable
-                 (check_argument_type position el_type))
-              (position + 1) ot ctx
-              (acc ^ show_data_type el_type) ) in
+              (Hashtbl_der.filter hashtable (check_type pos x_type))
+              (pos + 1) xs ctx ) in
     helper
-      (Hashtbl_der.filter t_class.method_table (fun _ t_method ->
-           List.length t_method.args = List.length args))
-      0 args g_ctx ""
+      (Hashtbl_der.filter t_class.constructor_table (fun _ cr ->
+           List.length cr.args = List.length args))
+      0 args g_ctx
 
-  and assign_verify left_key right_key =
-    (*For subtype polymorphism (inclusion polymorphism)*)
-    let rec check_parent key =
-      let find_class = Option.get (get_value_option class_table key) in
-      if find_class.class_key = left_key then return (CsClass right_key)
-      else
-        match find_class.parent_key with
-        | None -> error "Incorrect assign type"
-        | Some parent_key -> check_parent parent_key in
-    check_parent right_key
+  and classname_verify_polymorphic left_key right_key =
+    (*For subtype polymorphism (inclusion polymorphism) while passing parameters*)
+    let rec check_par key =
+      let get_p = Option.get (get_value_option class_table key) in
+      if get_p.class_key = left_key then true
+      else match get_p.parent_key with None -> false | Some pk -> check_par pk
+    in
+    check_par right_key
+
+  and method_verify :
+      table_class -> table_key -> expr list -> context -> table_method M.t =
+   fun t_class m_name args g_ctx ->
+    let check_type : int -> data_type -> table_key -> table_method -> bool =
+     fun position curr_type _ value ->
+      match List.nth_opt value.args position with
+      | None -> false
+      | Some (f_type, _) -> (
+        match curr_type with
+        | CsClass "null" -> (
+          match f_type with CsClass _ -> true | _ -> false )
+        | CsClass cl_key -> (
+          match f_type with
+          | CsClass this_key -> classname_verify_polymorphic this_key cl_key
+          | _ -> false )
+        | _ -> f_type = curr_type ) in
+    let rec helper hashtable pos expr_list ctx =
+      match Hashtbl.length hashtable with
+      | 0 -> error "Method not found"
+      | other -> (
+        match expr_list with
+        | [] -> (
+          match other with
+          | 1 -> return (List.hd (convert_table_to_list hashtable))
+          | _ -> (
+              Hashtbl_der.filter hashtable (fun _ mt ->
+                  startswith mt.method_key m_name)
+              |> fun filter_table ->
+              match Hashtbl.length filter_table with
+              | 1 -> return (List.hd (convert_table_to_list filter_table))
+              | _ -> error "Method not recognized" ) )
+        | x :: xs ->
+            expression_check x ctx
+            >>= fun x_type ->
+            helper
+              (Hashtbl_der.filter hashtable (check_type pos x_type))
+              (pos + 1) xs ctx ) in
+    helper
+      (Hashtbl_der.filter t_class.method_table (fun _ mr ->
+           List.length mr.args = List.length args))
+      0 args g_ctx
 end
