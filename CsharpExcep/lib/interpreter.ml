@@ -744,5 +744,128 @@ module Interpreter (M : MONADERROR) = struct
         >>= fun new_ctx ->
         if new_ctx.is_main then return new_ctx
         else delete_var_visibility new_ctx
+    | While (smexpr, stat) -> (
+        let rec loop l_stat ctx =
+          if ctx.was_break then
+            match l_stat with
+            (*decrement visibility level if StatementBlock*)
+            | StatementBlock _ ->
+                return
+                  (dec_visibility_level
+                     { ctx with
+                       was_break= false
+                     ; count_of_cycle= ctx.count_of_cycle - 1 })
+            | _ ->
+                return
+                  { ctx with
+                    was_break= false
+                  ; count_of_cycle= ctx.count_of_cycle - 1 }
+          else
+            interprete_expr smexpr ctx
+            >>= fun new_ctx ->
+            match new_ctx.last_expr_result with
+            | Some (VBool false) -> (
+              match l_stat with
+              | StatementBlock _ ->
+                  return
+                    (dec_visibility_level
+                       {new_ctx with count_of_cycle= ctx.count_of_cycle - 1})
+              | _ -> return {new_ctx with count_of_cycle= ctx.count_of_cycle - 1}
+              )
+            | Some (VBool true) ->
+                interprete_stat l_stat new_ctx
+                >>= fun g_ctx ->
+                if g_ctx.was_return then return g_ctx
+                else if g_ctx.was_continue then
+                  loop l_stat {g_ctx with was_continue= false}
+                else loop l_stat g_ctx
+            | _ -> error "Incorrect expression type for while stametent" in
+        match stat with
+        | StatementBlock _ ->
+            loop stat
+              (inc_visibility_level
+                 {input_ctx with count_of_cycle= input_ctx.count_of_cycle + 1})
+        | _ ->
+            loop stat
+              {input_ctx with count_of_cycle= input_ctx.count_of_cycle + 1} )
+    | Break ->
+        if input_ctx.count_of_cycle <= 0 then
+          error "There is no loop to do break"
+        else return {input_ctx with was_break= true}
+    | Continue ->
+        if input_ctx.count_of_cycle <= 0 then
+          error "There is no loop to do continue"
+        else return {input_ctx with was_continue= true}
+    | If (condit, body, else_body) -> (
+        interprete_expr condit input_ctx
+        >>= fun new_ctx ->
+        match new_ctx.last_expr_result with
+        | Some (VBool true) -> (
+          match body with
+          | StatementBlock _ ->
+              interprete_stat body (inc_visibility_level new_ctx)
+              >>= fun in_ctx -> return (dec_visibility_level in_ctx)
+          | _ -> interprete_stat body new_ctx )
+        | Some (VBool false) -> (
+          match else_body with
+          | Some else_st -> (
+            match else_st with
+            | StatementBlock _ ->
+                interprete_stat else_st (inc_visibility_level new_ctx)
+                >>= fun in_ctx -> return (dec_visibility_level in_ctx)
+            | _ -> interprete_stat else_st new_ctx )
+          | None -> return input_ctx )
+        | _ -> error "Incorrect type for condition statement" )
+    | For (dec_stat_o, expr_o, after_list, body) ->
+        ( match dec_stat_o with
+        | None -> return (inc_visibility_level input_ctx)
+        | Some dec_stat ->
+            interprete_stat dec_stat (inc_visibility_level input_ctx) )
+        >>= fun new_ctx ->
+        let rec loop body_stat af_list ctx =
+          if ctx.was_break then
+            return
+              { ctx with
+                was_break= false
+              ; count_of_cycle= ctx.count_of_cycle - 1
+              ; visibility_level= ctx.visibility_level - 1 }
+          else
+            ( match expr_o with
+            | None -> return {ctx with last_expr_result= Some (VBool true)}
+            | Some expr_t -> interprete_expr expr_t ctx )
+            >>= fun cond_ctx ->
+            match cond_ctx.last_expr_result with
+            (*проверка не прошла, значит с циклом все*)
+            | Some (VBool false) ->
+                return
+                  { cond_ctx with
+                    count_of_cycle= cond_ctx.count_of_cycle - 1
+                  ; visibility_level= cond_ctx.visibility_level - 1 }
+            | Some (VBool true) ->
+                let rec inter_expr_list e_list as_ctx =
+                  match e_list with
+                  | [] -> return as_ctx
+                  | x :: xs -> (
+                    match x with
+                    | PostDec _ | PostInc _ | PrefDec _ | PrefInc _
+                     |Assign (_, _)
+                     |CallMethod (_, _)
+                     |Access (_, CallMethod (_, _)) ->
+                        interprete_expr x as_ctx
+                        >>= fun z_ctx -> inter_expr_list xs z_ctx
+                    | _ -> error "Incorrect expression for after body list" )
+                in
+                interprete_stat body_stat cond_ctx
+                >>= fun body_ctx ->
+                if body_ctx.was_return then return body_ctx
+                else if body_ctx.was_continue then
+                  loop body_stat af_list {body_ctx with was_continue= false}
+                else
+                  inter_expr_list af_list body_ctx
+                  >>= fun after_ctx -> loop body_stat af_list after_ctx
+            | _ -> error "Incorrect condition type in for statement" in
+        loop body after_list new_ctx
     | _ -> raise Not_found
+
+  and interprete_expr = raise Not_found
 end
