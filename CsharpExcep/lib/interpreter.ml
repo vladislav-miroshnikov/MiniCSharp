@@ -61,6 +61,10 @@ type table_class =
 
 let class_table : (table_key, table_class) Hashtbl.t = Hashtbl.create 1024
 
+let startswith test_str sub_str =
+  let sub = String.sub test_str 0 (String.length sub_str) in
+  String.equal sub sub_str
+
 let convert_table_to_list hashtable =
   Hashtbl.fold (fun _ v acc -> v :: acc) hashtable []
 
