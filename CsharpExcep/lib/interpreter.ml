@@ -2,6 +2,7 @@ open Hashtbl
 open Ast
 open Parser
 open Stack
+open Operators
 
 module type MONAD = sig
   type 'a t
@@ -352,6 +353,7 @@ end
 
 module Interpreter (M : MONADERROR) = struct
   open M
+  open Operators
 
   type variable =
     { var_key: table_key
@@ -696,9 +698,6 @@ module Interpreter (M : MONADERROR) = struct
            List.length mr.args = List.length args))
       0 args g_ctx
 
-  let get_int_value = function VInt x -> x | _ -> 0
-  let get_string_value = function VString s -> s | _ -> ""
-  let get_bool_value = function VBool b -> b | _ -> false
   let get_obj_value = function VClass o -> o | _ -> ObjNull
 
   let get_default_value = function
@@ -976,5 +975,42 @@ module Interpreter (M : MONADERROR) = struct
         var_declarator var_list input_ctx
     | _ -> raise Not_found
 
-  and interprete_expr = raise Not_found
+  and interprete_expr : expr -> context -> context M.t =
+   fun in_expr in_ctx ->
+    let rec eval_expr e_expr ctx =
+      let eval_bin left_e right_e operator =
+        interprete_expr left_e ctx
+        >>= fun left_ctx ->
+        interprete_expr right_e left_ctx
+        >>= fun right_ctx ->
+        let get_left_value = Option.get left_ctx.last_expr_result in
+        let get_right_value = Option.get right_ctx.last_expr_result in
+        let cal_value = operator get_left_value get_right_value in
+        try return {right_ctx with last_expr_result= Some cal_value} with
+        | Invalid_argument m -> error m
+        | Division_by_zero -> error "Division by zero!" in
+      let eval_unar ex_operand operator =
+        interprete_expr ex_operand ctx
+        >>= fun new_ctx ->
+        let get_value = Option.get new_ctx.last_expr_result in
+        let cal_unar_v = operator get_value in
+        try return {new_ctx with last_expr_result= Some cal_unar_v}
+        with Invalid_argument m -> error m in
+      match e_expr with
+      | Add (left, right) -> eval_bin left right ( ++ )
+      | Sub (left, right) -> eval_bin left right ( -- )
+      | Mul (left, right) -> eval_bin left right ( ** )
+      | Div (left, right) -> eval_bin left right ( // )
+      | Mod (left, right) -> eval_bin left right ( %% )
+      | And (left, right) -> eval_bin left right ( &&& )
+      | Or (left, right) -> eval_bin left right ( ||| )
+      | Not not_exp -> eval_unar not_exp not_op
+      | Less (left, right) -> eval_bin left right ( <<< )
+      | More (left, right) -> eval_bin left right ( >>> )
+      | LessOrEqual (left, right) -> eval_bin left right ( <<== )
+      | MoreOrEqual (left, right) -> eval_bin left right ( >>== )
+      | Equal (left, right) -> eval_bin left right ( === )
+      | NotEqual (left, right) -> eval_bin left right ( !=! )
+      | _ -> raise Not_found in
+    raise Not_found
 end
