@@ -9,6 +9,7 @@ let reserved =
   ; "Console"; "namespace"; "using"; "int"; "bool"; "for"; "null"; "new"
   ; "return"; "break"; "continue"; "class" ]
 
+let const = token "const" >> return Const
 let parens = between (token "(") (token ")")
 let braces = between (token "{") (token "}")
 
@@ -162,10 +163,19 @@ module Stat = struct
       token "=" >> expr
       >>= (fun var_value -> return (var_name, Some var_value))
       <|> return (var_name, None) in
-    ( define_type
-    >>= fun var_type ->
-    sep_by1 helper (token ",")
-    >>= fun var_pair -> token ";" >> return (VarDeclare (var_type, var_pair)) )
+    choice
+      [ ( const
+        >>= fun modif ->
+        define_type
+        >>= fun var_type ->
+        sep_by1 helper (token ",")
+        >>= fun var_pair ->
+        token ";" >> return (VarDeclare (Some modif, var_type, var_pair)) )
+      ; ( define_type
+        >>= fun var_type ->
+        sep_by1 helper (token ",")
+        >>= fun var_pair ->
+        token ";" >> return (VarDeclare (None, var_type, var_pair)) ) ]
       input
 
   and stat_block input =

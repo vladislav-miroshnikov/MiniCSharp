@@ -7,7 +7,8 @@
     ([Public; Static],
      Method
      (Void, "A3", [],
-      StatementBlock ([VarDeclare (Int, [("x", Some (ConstExpr (VInt (0))))]);
+      StatementBlock ([VarDeclare
+                       (None, Int, [("x", Some (ConstExpr (VInt (0))))]);
                        Try
                        (StatementBlock ([Throw (ClassCreate ("ShittyExn", []))]),
                         [], Some (StatementBlock ([Print (IdentVar ("x"))])))])));

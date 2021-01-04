@@ -63,7 +63,7 @@ and statement =
   | Break
   | Continue
   | Return of expr option
-  | VarDeclare of data_type * (string * expr option) list
+  | VarDeclare of modifier option * data_type * (string * expr option) list
   | Expression of expr
   | Throw of expr
   | StatementBlock of statement list

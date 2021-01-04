@@ -701,6 +701,13 @@ module Interpreter (M : MONADERROR) = struct
   let get_bool_value = function VBool b -> b | _ -> false
   let get_obj_value = function VClass o -> o | _ -> ObjNull
 
+  let get_default_value = function
+    | Int -> VInt 0
+    | String -> VString ""
+    | CsClass _ -> VClass ObjNull
+    | Bool -> VBool false
+    | Void -> VVoid
+
   let make_list_of_elem el size =
     let rec helper acc curr =
       match curr with 0 -> acc | x -> helper (el :: acc) (x - 1) in
@@ -865,6 +872,90 @@ module Interpreter (M : MONADERROR) = struct
                   >>= fun after_ctx -> loop body_stat af_list after_ctx
             | _ -> error "Incorrect condition type in for statement" in
         loop body after_list new_ctx
+    | Return result_op -> (
+      match result_op with
+      | None when input_ctx.current_meth_type = Void ->
+          return {input_ctx with last_expr_result= Some VVoid; was_return= true}
+      | None -> error "Return value error"
+      | Some result ->
+          expression_check result input_ctx
+          >>= fun ret_type ->
+          if ret_type <> input_ctx.current_meth_type then
+            error "Return value error"
+          else
+            interprete_expr result input_ctx
+            >>= fun new_ctx -> return {new_ctx with was_return= true} )
+    | Expression s_expr -> (
+      match s_expr with
+      | PostDec _ | PostInc _ | PrefDec _ | PrefInc _
+       |CallMethod (_, _)
+       |Access (_, CallMethod (_, _))
+       |Assign (_, _) ->
+          interprete_expr s_expr input_ctx >>= fun new_ctx -> return new_ctx
+      | _ -> error "Incorrect expression for statement" )
+    | VarDeclare (modifier, vars_type, var_list) ->
+        let is_const : modifier option -> bool = function
+          | Some Const -> true
+          | _ -> false in
+        let rec var_declarator v_list var_ctx =
+          match v_list with
+          | [] -> return var_ctx
+          | (var_name, var_expr_o) :: tail -> (
+            match var_ctx.current_o with
+            | ObjNull -> error "Impossible to execute in null object"
+            | ObjRef {class_key= _; class_table= table; number= _} ->
+                ( if
+                  Hashtbl.mem var_ctx.variable_table var_name
+                  || Hashtbl.mem table var_name
+                then error "Variable with this name is already defined"
+                else
+                  match var_expr_o with
+                  | None ->
+                      Hashtbl.add var_ctx.variable_table var_name
+                        { var_key= var_name
+                        ; var_type= vars_type
+                        ; var_value= get_default_value vars_type
+                        ; is_mutable= is_const modifier
+                        ; assignment_count= 0
+                        ; visibility_level= var_ctx.visibility_level } ;
+                      return var_ctx
+                  | Some var_expr_e -> (
+                      expression_check var_expr_e var_ctx
+                      >>= fun var_expr_type ->
+                      let add_helper new_var =
+                        interprete_expr new_var var_ctx
+                        >>= fun ctx_aft_ad ->
+                        Hashtbl.add ctx_aft_ad.variable_table var_name
+                          { var_key= var_name
+                          ; var_type= var_expr_type
+                          ; var_value= Option.get ctx_aft_ad.last_expr_result
+                          ; is_mutable= is_const modifier
+                          ; assignment_count= 1
+                          ; visibility_level= ctx_aft_ad.visibility_level } ;
+                        return ctx_aft_ad in
+                      match var_expr_type with
+                      | CsClass "null" -> (
+                        match vars_type with
+                        | CsClass _ -> add_helper var_expr_e
+                        | _ ->
+                            error
+                              "Incorrect assign type in variable declaration" )
+                      | CsClass class_right -> (
+                        match vars_type with
+                        | CsClass class_left ->
+                            assign_verify_polymorphic class_left class_right
+                            >>= fun _ -> add_helper var_expr_e
+                        | _ ->
+                            error
+                              "Incorrect assign type in variable declaration" )
+                      | _ when var_expr_type = vars_type ->
+                          add_helper var_expr_e
+                      | _ ->
+                          error
+                            ( "Incorrect value type for declared variable:"
+                            ^ show_data_type var_expr_type ) ) )
+                >>= fun head_ctx -> var_declarator tail head_ctx ) in
+        var_declarator var_list input_ctx
     | _ -> raise Not_found
 
   and interprete_expr = raise Not_found
