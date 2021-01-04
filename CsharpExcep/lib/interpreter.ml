@@ -719,6 +719,15 @@ module Interpreter (M : MONADERROR) = struct
   let dec_visibility_level ctx =
     {ctx with visibility_level= ctx.visibility_level - 1}
 
+  let delete_var_visibility : context -> context M.t =
+   fun ctx ->
+    let delete : table_key -> variable -> unit =
+     fun key element ->
+      if element.visibility_level = ctx.visibility_level then
+        Hashtbl.remove ctx.variable_table key in
+    Hashtbl.iter delete ctx.variable_table ;
+    return ctx
+
   let rec interprete_stat : statement -> context -> context M.t =
    fun stat input_ctx ->
     match stat with
@@ -739,19 +748,12 @@ module Interpreter (M : MONADERROR) = struct
             | _ ->
                 interprete_stat st e_ctx
                 >>= fun head_ctx -> eval_stat tail head_ctx ) in
-        let delete_var_visibility : context -> context M.t =
-         fun ctx ->
-          let delete : table_key -> variable -> unit =
-           fun key element ->
-            if element.visibility_level <> ctx.visibility_level then
-              Hashtbl.remove ctx.variable_table key in
-          Hashtbl.iter delete ctx.variable_table ;
-          return ctx in
         eval_stat stat_list input_ctx
         >>= fun new_ctx ->
         if new_ctx.is_main then return new_ctx
         else delete_var_visibility new_ctx
     | While (smexpr, stat) -> (
+        let was_main = input_ctx.is_main in
         let rec loop l_stat ctx =
           if ctx.was_break then
             match l_stat with
@@ -776,7 +778,10 @@ module Interpreter (M : MONADERROR) = struct
               | StatementBlock _ ->
                   return
                     (dec_visibility_level
-                       {new_ctx with count_of_cycle= ctx.count_of_cycle - 1})
+                       { new_ctx with
+                         count_of_cycle= ctx.count_of_cycle - 1
+                       ; is_main= was_main })
+                  (*additional flag for context *)
               | _ -> return {new_ctx with count_of_cycle= ctx.count_of_cycle - 1}
               )
             | Some (VBool true) ->
@@ -791,7 +796,9 @@ module Interpreter (M : MONADERROR) = struct
         | StatementBlock _ ->
             loop stat
               (inc_visibility_level
-                 {input_ctx with count_of_cycle= input_ctx.count_of_cycle + 1})
+                 { input_ctx with
+                   count_of_cycle= input_ctx.count_of_cycle + 1
+                 ; is_main= false })
         | _ ->
             loop stat
               {input_ctx with count_of_cycle= input_ctx.count_of_cycle + 1} )
@@ -806,36 +813,44 @@ module Interpreter (M : MONADERROR) = struct
     | If (condit, body, else_body) -> (
         interprete_expr condit input_ctx
         >>= fun new_ctx ->
+        let was_main = new_ctx.is_main in
         match new_ctx.last_expr_result with
         | Some (VBool true) -> (
           match body with
           | StatementBlock _ ->
-              interprete_stat body (inc_visibility_level new_ctx)
-              >>= fun in_ctx -> return (dec_visibility_level in_ctx)
+              interprete_stat body
+                (inc_visibility_level {new_ctx with is_main= false})
+              >>= fun in_ctx ->
+              return (dec_visibility_level {in_ctx with is_main= was_main})
           | _ -> interprete_stat body new_ctx )
         | Some (VBool false) -> (
           match else_body with
           | Some else_st -> (
             match else_st with
             | StatementBlock _ ->
-                interprete_stat else_st (inc_visibility_level new_ctx)
-                >>= fun in_ctx -> return (dec_visibility_level in_ctx)
+                interprete_stat else_st
+                  (inc_visibility_level {new_ctx with is_main= false})
+                >>= fun in_ctx ->
+                return (dec_visibility_level {in_ctx with is_main= was_main})
             | _ -> interprete_stat else_st new_ctx )
           | None -> return input_ctx )
         | _ -> error "Incorrect type for condition statement" )
     | For (dec_stat_o, expr_o, after_list, body) ->
+        let was_main = input_ctx.is_main in
         ( match dec_stat_o with
-        | None -> return (inc_visibility_level input_ctx)
+        | None -> return (inc_visibility_level {input_ctx with is_main= false})
         | Some dec_stat ->
-            interprete_stat dec_stat (inc_visibility_level input_ctx) )
+            interprete_stat dec_stat
+              (inc_visibility_level {input_ctx with is_main= false}) )
         >>= fun new_ctx ->
         let rec loop body_stat af_list ctx =
           if ctx.was_break then
-            return
+            delete_var_visibility
               { ctx with
                 was_break= false
               ; count_of_cycle= ctx.count_of_cycle - 1
-              ; visibility_level= ctx.visibility_level - 1 }
+              ; visibility_level= ctx.visibility_level - 1
+              ; is_main= was_main }
           else
             ( match expr_o with
             | None -> return {ctx with last_expr_result= Some (VBool true)}
@@ -844,10 +859,11 @@ module Interpreter (M : MONADERROR) = struct
             match cond_ctx.last_expr_result with
             (*проверка не прошла, значит с циклом все*)
             | Some (VBool false) ->
-                return
+                delete_var_visibility
                   { cond_ctx with
                     count_of_cycle= cond_ctx.count_of_cycle - 1
-                  ; visibility_level= cond_ctx.visibility_level - 1 }
+                  ; visibility_level= cond_ctx.visibility_level - 1
+                  ; is_main= was_main }
             | Some (VBool true) ->
                 let rec inter_expr_list e_list as_ctx =
                   match e_list with
@@ -862,9 +878,11 @@ module Interpreter (M : MONADERROR) = struct
                         >>= fun z_ctx -> inter_expr_list xs z_ctx
                     | _ -> error "Incorrect expression for after body list" )
                 in
-                interprete_stat body_stat cond_ctx
+                interprete_stat body_stat
+                  {cond_ctx with visibility_level= new_ctx.visibility_level + 1}
                 >>= fun body_ctx ->
-                if body_ctx.was_return then return body_ctx
+                if body_ctx.was_return then
+                  return {body_ctx with is_main= was_main}
                 else if body_ctx.was_continue then
                   loop body_stat af_list {body_ctx with was_continue= false}
                 else
