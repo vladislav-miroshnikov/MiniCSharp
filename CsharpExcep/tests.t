@@ -3,10 +3,7 @@
   ([], "Program", None,
    [([Static],
      Method
-     (Void, "Main", [],
-      StatementBlock ([Expression (CallMethod ("E3", []));
-                       Expression (Access
-                                   (IdentVar ("cat"), CallMethod ("Sum", [])))])));
+     (Void, "Main", [], StatementBlock ([Expression (CallMethod ("E3", []))])));
     ([Public; Static],
      Method
      (Void, "A3", [],

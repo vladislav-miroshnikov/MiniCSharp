@@ -1035,6 +1035,62 @@ module Interpreter (M : MONADERROR) = struct
             | None -> error "Field not found"
           with Failure m | Invalid_argument m -> error m ) )
       | Null -> return {ctx with last_expr_result= Some (VClass ObjNull)}
+      | Access (obj_expr, IdentVar field_key) -> (
+          interprete_expr obj_expr ctx
+          >>= fun ob_ctx ->
+          let get_obj = Option.get ob_ctx.last_expr_result in
+          match get_obj with
+          | VClass (ObjRef {class_key= _; class_table= table; number= _}) ->
+              let get_field = Option.get (get_value_option table field_key) in
+              return {ob_ctx with last_expr_result= Some get_field.f_value}
+          | _ -> error "Cannot access a field of non-reference type" )
+      | Access (obj_expr, CallMethod (m_name, args)) -> (
+          interprete_expr obj_expr ctx
+          >>= fun ob_ctx ->
+          let get_obj = Option.get ob_ctx.last_expr_result in
+          match get_obj with
+          | VClass obj -> (
+            match obj with
+            | ObjNull -> error "NullReferenceException"
+            | ObjRef {class_key= cl_k; class_table= _; number= _} -> (
+              match get_value_option class_table cl_k with
+              | None -> error "Class not found"
+              | Some found_class ->
+                  method_verify found_class m_name args ob_ctx
+                  >>= fun meth ->
+                  let create_var_table : (table_key, variable) Hashtbl_der.t =
+                    Hashtbl.create 128 in
+                  prepare_table create_var_table args meth.args ob_ctx
+                  >>= fun (new_table, new_ctx) ->
+                  interprete_stat meth.body
+                    { current_o= obj
+                    ; variable_table= new_table
+                    ; current_meth_type= meth.method_type
+                    ; last_expr_result= None
+                    ; was_break= false
+                    ; was_return= false
+                    ; was_continue= false
+                    ; is_main= false
+                    ; is_constructor= false
+                    ; count_of_cycle= 0
+                    ; visibility_level= 0
+                    ; prev_ctx= Some ctx
+                    ; count_of_obj= ctx.count_of_obj
+                    ; is_creation= false
+                    ; constr_affilation= None
+                    ; exception_class= None }
+                  >>= fun res_ctx ->
+                  (* After processing the method, return the context with the result of the method.
+                     If some states of objects changed inside the method, they must change based on the mutability of hash tables
+                     as a result of assignments *)
+                  return
+                    { new_ctx with
+                      last_expr_result= res_ctx.last_expr_result
+                    ; count_of_obj= res_ctx.count_of_obj
+                    ; is_creation= false } ) )
+          | _ -> error "Cannot access a field of non-reference type" )
       | _ -> raise Not_found in
     raise Not_found
+
+  and prepare_table = raise Not_found
 end
