@@ -215,7 +215,8 @@ module Stat = struct
   and return_stat input =
     ( token "return"
     >> choice
-         [ (expr >>= fun result -> token ";" >> return (Return (Some result)))
+         [ ( skip_many1 space >> expr
+           >>= fun result -> token ";" >> return (Return (Some result)) )
          ; token ";" >> return (Return None) ] )
       input
 

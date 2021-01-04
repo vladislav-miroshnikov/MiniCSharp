@@ -13,6 +13,7 @@ let parse_input =
         static void Main()
         {
             E3();
+            cat.Sum();
         }
 
         public static void A3()

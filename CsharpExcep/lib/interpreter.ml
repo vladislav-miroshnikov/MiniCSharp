@@ -3,6 +3,9 @@ open Ast
 open Parser
 open Stack
 open Operators
+open Extractors
+open Printf
+open Printexc
 
 module type MONAD = sig
   type 'a t
@@ -155,8 +158,6 @@ module ClassLoader (M : MONADERROR) = struct
           return ()
       | Method (_, "Main", _, _) ->
           error "Only one main method can be in program!"
-      (* | Method (_, _, _, _) when is_static l ->
-          error "Method can not be static" CHECK!!!!! *)
       | Method (_, _, _, _) when is_const l -> error "Method can not be const"
       | Method (_, _, _, _) -> return ()
       | VariableField (_, _) when (not (is_static l)) && not (is_override l) ->
@@ -376,9 +377,11 @@ module Interpreter (M : MONADERROR) = struct
     ; is_constructor: bool
     ; count_of_cycle: int
     ; visibility_level: int
-    ; main_ctx: context option
+    ; prev_ctx: context option
     ; count_of_obj: int
-    ; is_creation: bool }
+    ; is_creation: bool
+    ; constr_affilation: table_key option
+    ; exception_class: table_class option }
 
   let sharp_stack = Stack.create
 
@@ -395,16 +398,11 @@ module Interpreter (M : MONADERROR) = struct
       ; is_constructor= false
       ; count_of_cycle= 0
       ; visibility_level= 0
-      ; main_ctx= None
+      ; prev_ctx= None
       ; count_of_obj= 0
-      ; is_creation= false }
-
-  let get_main_ctx ctx =
-    match ctx.main_ctx with None -> ctx | Some main_ctx -> main_ctx
-
-  let get_obj_num = function
-    | ObjNull -> error "NullPointerException"
-    | ObjRef {class_key= _; class_table= _; number= n} -> return n
+      ; is_creation= false
+      ; constr_affilation= None
+      ; exception_class= None }
 
   let find_main_class hashtable =
     List.find
@@ -698,15 +696,6 @@ module Interpreter (M : MONADERROR) = struct
            List.length mr.args = List.length args))
       0 args g_ctx
 
-  let get_obj_value = function VClass o -> o | _ -> ObjNull
-
-  let get_default_value = function
-    | Int -> VInt 0
-    | String -> VString ""
-    | CsClass _ -> VClass ObjNull
-    | Bool -> VBool false
-    | Void -> VVoid
-
   let make_list_of_elem el size =
     let rec helper acc curr =
       match curr with 0 -> acc | x -> helper (el :: acc) (x - 1) in
@@ -809,6 +798,27 @@ module Interpreter (M : MONADERROR) = struct
         if input_ctx.count_of_cycle <= 0 then
           error "There is no loop to do continue"
         else return {input_ctx with was_continue= true}
+    | Throw s_expr ->
+        interprete_expr s_expr input_ctx >>= fun new_ctx -> return new_ctx
+    | Print print_expr ->
+        interprete_expr print_expr input_ctx
+        >>= fun new_ctx ->
+        let printer = function
+          | VInt value -> return (printf "%d\n" value)
+          | VBool value -> return (printf "%b\n" value)
+          | VChar value -> return (printf "%c\n" value)
+          | VString value -> return (printf "%s\n" value)
+          | VClass value -> (
+            match value with
+            | ObjNull -> error "NullReferenceException"
+            | ObjRef ob -> return (printf "%s" ob.class_key) )
+          | VVoid -> error "Impossible to print void"
+          | VNull -> error "Impossible to print null" in
+        printer (Option.get new_ctx.last_expr_result)
+        >> (* with ex ->
+              let print_ex = Printexc.to_string ex in
+              Printf.eprintf "There was an error: %s" print_ex ) ; *)
+        return new_ctx
     | If (condit, body, else_body) -> (
         interprete_expr condit input_ctx
         >>= fun new_ctx ->
@@ -1011,6 +1021,20 @@ module Interpreter (M : MONADERROR) = struct
       | MoreOrEqual (left, right) -> eval_bin left right ( >>== )
       | Equal (left, right) -> eval_bin left right ( === )
       | NotEqual (left, right) -> eval_bin left right ( !=! )
+      | ConstExpr value -> return {ctx with last_expr_result= Some value}
+      | IdentVar var_id -> (
+        match get_value_option ctx.variable_table var_id with
+        | Some id -> return {ctx with last_expr_result= Some id.var_value}
+        | None -> (
+          try
+            get_obj_info ctx.current_o
+            |> fun (_, table, _) ->
+            match get_value_option table var_id with
+            | Some field ->
+                return {ctx with last_expr_result= Some field.f_value}
+            | None -> error "Field not found"
+          with Failure m | Invalid_argument m -> error m ) )
+      | Null -> return {ctx with last_expr_result= Some (VClass ObjNull)}
       | _ -> raise Not_found in
     raise Not_found
 end
