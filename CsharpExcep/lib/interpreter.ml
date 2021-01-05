@@ -41,7 +41,7 @@ type table_constructor = {args: (data_type * expr) list; body: statement}
 type table_field =
   { field_type: data_type
   ; field_key: table_key
-  ; is_mutable: bool
+  ; is_const: bool
   ; sub_tree: expr option }
 [@@deriving show {with_path= false}]
 
@@ -56,14 +56,15 @@ type table_method =
 
 type table_class =
   { class_key: table_key
-  ; field_table: (table_key, table_field) Hashtbl.t
-  ; method_table: (table_key, table_method) Hashtbl.t
-  ; constructor_table: (table_key, table_constructor) Hashtbl.t
+  ; field_table: (table_key, table_field) Hashtbl_der.t
+  ; method_table: (table_key, table_method) Hashtbl_der.t
+  ; constructor_table: (table_key, table_constructor) Hashtbl_der.t
   ; parent_key: table_key option
   ; children_keys: table_key list
   ; dec_tree: cs_class }
+[@@deriving show {with_path= false}]
 
-let class_table : (table_key, table_class) Hashtbl.t = Hashtbl.create 1024
+let class_table : (table_key, table_class) Hashtbl_der.t = Hashtbl.create 1024
 
 let startswith test_str sub_str =
   let sub = String.sub test_str 0 (String.length sub_str) in
@@ -80,7 +81,7 @@ module ClassLoader (M : MONADERROR) = struct
   let is_override = List.mem Override
   let is_static = List.mem Static
   let is_public = List.mem Public
-  let is_const = List.mem Const
+  let check_const = List.mem Const
 
   let replace_elem_hash_table hashtable key value =
     Hashtbl.replace hashtable key value ;
@@ -113,14 +114,12 @@ module ClassLoader (M : MONADERROR) = struct
           |})
       } in
     let message : table_field =
-      { field_type= String
-      ; field_key= "Message"
-      ; is_mutable= true
-      ; sub_tree= None } in
+      {field_type= String; field_key= "Message"; is_const= false; sub_tree= None}
+    in
     let stack_trace : table_field =
       { field_type= String
       ; field_key= "StackTrace"
-      ; is_mutable= true
+      ; is_const= false
       ; sub_tree= None } in
     Hashtbl.add method_table "ToString" to_string ;
     Hashtbl.add field_table "Message" message ;
@@ -154,18 +153,19 @@ module ClassLoader (M : MONADERROR) = struct
     | l, f -> (
       match f with
       | Method (Void, "Main", [], _)
-        when is_static l && (not (is_const l)) && not (is_override l) ->
+        when is_static l && check_const l && not (is_override l) ->
           return ()
       | Method (_, "Main", _, _) ->
           error "Only one main method can be in program!"
-      | Method (_, _, _, _) when is_const l -> error "Method can not be const"
+      | Method (_, _, _, _) when check_const l ->
+          error "Method can not be const"
       | Method (_, _, _, _) -> return ()
       | VariableField (_, _) when (not (is_static l)) && not (is_override l) ->
           return ()
       | VariableField (_, _) -> error "Wrong modifiers"
       | Constructor (_, _, _)
         when (not (is_static l))
-             && (not (is_const l))
+             && (not (check_const l))
              && (not (is_override l))
              && is_public l ->
           return ()
@@ -173,8 +173,9 @@ module ClassLoader (M : MONADERROR) = struct
 
   let class_modifiers_check = function
     | Class (ml, _, _, _)
-      when (not (is_static ml)) && (not (is_override ml)) && not (is_const ml)
-      ->
+      when (not (is_static ml))
+           && (not (is_override ml))
+           && not (check_const ml) ->
         return ()
     | Class (_, _, _, _) -> error "Wrong class modifiers"
 
@@ -211,9 +212,9 @@ module ClassLoader (M : MONADERROR) = struct
                 let rec add_var_field = function
                   | [] -> return ()
                   | (field_key, sub_tree) :: ps ->
-                      let is_mutable = not (is_const mod_list) in
+                      let is_const = check_const mod_list in
                       add_to_table field_table field_key
-                        {field_type; field_key; is_mutable; sub_tree}
+                        {field_type; field_key; is_const; sub_tree}
                         "Similar fields"
                       >> add_var_field ps in
                 field_modifiers_check field_elem >> add_var_field arg_list
@@ -360,7 +361,7 @@ module Interpreter (M : MONADERROR) = struct
     { var_key: table_key
     ; var_type: data_type
     ; var_value: value
-    ; is_mutable: bool
+    ; is_const: bool
     ; assignment_count: int
     ; visibility_level: int }
   [@@deriving show {with_path= false}]
@@ -720,14 +721,14 @@ module Interpreter (M : MONADERROR) = struct
    fun field ->
     match field.assignment_count with
     | 0 -> return ()
-    | _ when not field.is_mutable -> return ()
+    | _ when not field.is_const -> return ()
     | _ -> error "Assignment to a constant field"
 
   let check_assign_variable : variable -> unit M.t =
    fun var ->
     match var.assignment_count with
     | 0 -> return ()
-    | _ when not var.is_mutable -> return ()
+    | _ when not var.is_const -> return ()
     | _ -> error "Assignment to a constant field"
 
   let rec interprete_stat : statement -> context -> context M.t =
@@ -747,6 +748,7 @@ module Interpreter (M : MONADERROR) = struct
             | _ when e_ctx.count_of_cycle >= 1 && e_ctx.was_continue ->
                 return e_ctx
             | _ when e_ctx.was_return -> return e_ctx
+            | _ when e_ctx.was_thrown -> return e_ctx (*exception*)
             | _ ->
                 interprete_stat st e_ctx
                 >>= fun head_ctx -> eval_stat tail head_ctx ) in
@@ -835,6 +837,8 @@ module Interpreter (M : MONADERROR) = struct
             | StatementBlock _ ->
                 interprete_stat finally_stat
                   (inc_visibility_level {after_try_ctx with is_main= false})
+                >>= fun f_ctx ->
+                return (dec_visibility_level {f_ctx with is_main= was_main})
             | _ -> error "Expected { and } in finally block!" ) ) )
     | Print print_expr ->
         interprete_expr print_expr input_ctx
@@ -960,7 +964,7 @@ module Interpreter (M : MONADERROR) = struct
           interprete_expr s_expr input_ctx >>= fun new_ctx -> return new_ctx
       | _ -> error "Incorrect expression for statement" )
     | VarDeclare (modifier, vars_type, var_list) ->
-        let is_const : modifier option -> bool = function
+        let check_const : modifier option -> bool = function
           | Some Const -> true
           | _ -> false in
         let rec var_declarator v_list var_ctx =
@@ -981,7 +985,7 @@ module Interpreter (M : MONADERROR) = struct
                         { var_key= var_name
                         ; var_type= vars_type
                         ; var_value= get_default_value vars_type
-                        ; is_mutable= is_const modifier
+                        ; is_const= check_const modifier
                         ; assignment_count= 0
                         ; visibility_level= var_ctx.visibility_level } ;
                       return var_ctx
@@ -995,7 +999,7 @@ module Interpreter (M : MONADERROR) = struct
                           { var_key= var_name
                           ; var_type= var_expr_type
                           ; var_value= Option.get ctx_aft_ad.last_expr_result
-                          ; is_mutable= is_const modifier
+                          ; is_const= check_const modifier
                           ; assignment_count= 1
                           ; visibility_level= ctx_aft_ad.visibility_level } ;
                         return ctx_aft_ad in
@@ -1022,11 +1026,10 @@ module Interpreter (M : MONADERROR) = struct
                             ^ show_data_type var_expr_type ) ) )
                 >>= fun head_ctx -> var_declarator tail head_ctx ) in
         var_declarator var_list input_ctx
-    | _ -> raise Not_found
 
   and interprete_expr : expr -> context -> context M.t =
    fun in_expr in_ctx ->
-    let rec eval_expr e_expr ctx =
+    let eval_expr e_expr ctx =
       let eval_bin left_e right_e operator =
         interprete_expr left_e ctx
         >>= fun left_ctx ->
@@ -1144,8 +1147,19 @@ module Interpreter (M : MONADERROR) = struct
           get_this_obj
           >>= fun new_ctx ->
           interprete_expr (Access (Null, CallMethod (m_name, args))) new_ctx
-      | _ -> raise Not_found in
+      | Assign (IdentVar var_key, val_expr) ->
+          interprete_expr val_expr ctx
+          >>= fun eval_ctx ->
+          update_identifier var_key
+            (Option.get eval_ctx.last_expr_result)
+            eval_ctx
+      | Assign (Access (obj, field_name), val_expr) ->
+          interprete_expr val_expr ctx
+          >>= fun eval_ctx -> update_field obj field_name eval_ctx
+      | _ -> error "Incorrect expression!" in
     raise Not_found
 
   and prepare_table = raise Not_found
+  and update_identifier = raise Not_found
+  and update_field = raise Not_found
 end

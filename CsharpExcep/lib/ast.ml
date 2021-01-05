@@ -15,7 +15,7 @@ and field_ref =
   { key: string
   ; f_type: data_type
   ; f_value: value
-  ; is_mutable: bool
+  ; is_const: bool
   ; assignment_count: int }
 
 and obj_ref =

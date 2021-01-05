@@ -19,10 +19,13 @@ type ('a, 'b) t = ('a, 'b) Hashtbl.t
 let create = Hashtbl.create
 
 let pp pp_key pp_value ppf hashtable =
+  Format.fprintf ppf "[["
+  |> fun () ->
   Hashtbl.iter
     (fun key data ->
       Format.fprintf ppf "@[<1>%a@ ->@ %a@]@\n@." pp_key key pp_value data)
     hashtable
+  |> fun () -> Format.fprintf ppf "]]@\n"
 
 let filter : ('a, 'b) t -> ('a -> 'b -> bool) -> ('a, 'b) t =
  fun ht f ->
