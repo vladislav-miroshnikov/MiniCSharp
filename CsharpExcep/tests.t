@@ -3,7 +3,11 @@
   ([], "Program", None,
    [([Static],
      Method
-     (Void, "Main", [], StatementBlock ([Expression (CallMethod ("E3", []))])));
+     (Void, "Main", [],
+      StatementBlock ([Expression (CallMethod ("E3", []));
+                       Try
+                       (Print (ConstExpr (VString ("hh"))), [],
+                        Some (Print (ConstExpr (VString ("fff")))))])));
     ([Public; Static],
      Method
      (Void, "A3", [],

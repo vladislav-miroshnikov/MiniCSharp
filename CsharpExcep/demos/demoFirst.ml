@@ -13,6 +13,8 @@ let parse_input =
         static void Main()
         {
             E3();
+            try Console.WriteLine("hh");
+            finally Console.WriteLine("fff");
         }
 
         public static void A3()

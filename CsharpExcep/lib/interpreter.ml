@@ -716,6 +716,20 @@ module Interpreter (M : MONADERROR) = struct
     Hashtbl.iter delete ctx.variable_table ;
     return ctx
 
+  let check_assign_field : field_ref -> unit M.t =
+   fun field ->
+    match field.assignment_count with
+    | 0 -> return ()
+    | _ when not field.is_mutable -> return ()
+    | _ -> error "Assignment to a constant field"
+
+  let check_assign_variable : variable -> unit M.t =
+   fun var ->
+    match var.assignment_count with
+    | 0 -> return ()
+    | _ when not var.is_mutable -> return ()
+    | _ -> error "Assignment to a constant field"
+
   let rec interprete_stat : statement -> context -> context M.t =
    fun stat input_ctx ->
     match stat with
@@ -801,6 +815,27 @@ module Interpreter (M : MONADERROR) = struct
     | Throw s_expr ->
         interprete_expr s_expr {input_ctx with was_thrown= true}
         >>= fun new_ctx -> return new_ctx
+    | Try (try_stat, try_list, finally_stat_o) -> (
+        let was_main = input_ctx.is_main in
+        ( match try_stat with
+        | StatementBlock _ ->
+            interprete_stat try_stat
+              (inc_visibility_level {input_ctx with is_main= false})
+            >>= fun t_ctx ->
+            return (dec_visibility_level {t_ctx with is_main= was_main})
+        | _ -> error "Expected { and } in try block!" )
+        >>= fun after_try_ctx ->
+        match after_try_ctx.was_thrown with
+        | true -> raise Not_found
+        | false -> (
+          match finally_stat_o with
+          | None -> return after_try_ctx
+          | Some finally_stat -> (
+            match finally_stat with
+            | StatementBlock _ ->
+                interprete_stat finally_stat
+                  (inc_visibility_level {after_try_ctx with is_main= false})
+            | _ -> error "Expected { and } in finally block!" ) ) )
     | Print print_expr ->
         interprete_expr print_expr input_ctx
         >>= fun new_ctx ->
@@ -894,7 +929,9 @@ module Interpreter (M : MONADERROR) = struct
                 if body_ctx.was_return then
                   return {body_ctx with is_main= was_main}
                 else if body_ctx.was_continue then
-                  loop body_stat af_list {body_ctx with was_continue= false}
+                  inter_expr_list af_list body_ctx
+                  >>= fun after_ctx ->
+                  loop body_stat af_list {after_ctx with was_continue= false}
                 else
                   inter_expr_list af_list body_ctx
                   >>= fun after_ctx -> loop body_stat af_list after_ctx
