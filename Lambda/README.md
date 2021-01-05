@@ -29,14 +29,14 @@ Features in progress (and TODOs):
 - ворнинги должны быть пофикшены
 - Не стесняйтесь писать `if ... then ... else` вместо `match ... with true -> .. | false -> ...`
 - Не стесняйтесь писать гварды в мэтчинге, например 
-```
-match .. with 
+```ocaml
+match ... with 
 | x when f x -> ...
 | x          -> ...
 | ...
 ```
 вместо 
-```
+```ocaml
 match ... with 
 | x -> if f x then ... else ...
 | ...
@@ -52,4 +52,42 @@ utop # {|
   |};;
 - : string = "\n  int main () {\n    return 0;\n  }\n  "
 ```
+- Не надо писать 
+```ocaml
+match ... with 
+| x -> 
+    Hashtbl.replace tbl key value |> fun () -> ...
+```
+Лучше 
+```ocaml
+match ... with 
+| x -> 
+    let () = Hashtbl.replace tbl key value in 
+    ...
+```
+или
+```ocaml
+match ... with 
+| x -> (
+    Hashtbl.replace tbl key value;
+    ...
+  )
+```
+или даже
+```ocaml
+match ... with 
+| x -> begin
+    Hashtbl.replace tbl key value;
+    ...
+  end
+```
+- Не надо писать 
+```ocaml
+let x = if long_expression then true else false in ...
+```
+лучше
+```ocaml
+let x = long_expression in ...
+```
+
 - 1
