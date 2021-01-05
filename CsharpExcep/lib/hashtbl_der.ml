@@ -33,4 +33,6 @@ let filter : ('a, 'b) t -> ('a -> 'b -> bool) -> ('a, 'b) t =
   Hashtbl.iter (fun k v -> if f k v then Hashtbl.add new_table k v) ht ;
   new_table
 
-let get_value_option = Hashtbl.find_opt (*удалить!*)
+let get_value_option hashtable key = Hashtbl.find_opt hashtable key
+
+(*удалить!*)

@@ -2,6 +2,7 @@ open Hashtbl
 open Ast
 open Parser
 open Stack
+open Hashtbl_der
 open Operators
 open Extractors
 open Printf
@@ -18,7 +19,6 @@ end
 module type MONADERROR = sig
   include MONAD
 
-  val get : 'a t -> 'a
   val error : string -> 'a t
 end
 
@@ -30,7 +30,6 @@ module Result = struct
   let return = Result.ok
   let error = Result.error
   let ( >> ) x f = x >>= fun _ -> f
-  let get = Result.get_ok
 end
 
 type table_key = string [@@deriving show]
@@ -70,10 +69,11 @@ let startswith test_str sub_str =
   let sub = String.sub test_str 0 (String.length sub_str) in
   String.equal sub sub_str
 
-let convert_table_to_list hashtable =
-  Hashtbl.fold (fun _ v acc -> v :: acc) hashtable []
+let convert_table_to_seq = Hashtbl.to_seq_values
 
-let get_value_option = Hashtbl.find_opt
+(*because we work with delayed list*)
+let get_seq_hd seq =
+  match seq () with Seq.Nil -> raise Not_found | Seq.Cons (el, _) -> el
 
 module ClassLoader (M : MONADERROR) = struct
   open M
@@ -92,15 +92,30 @@ module ClassLoader (M : MONADERROR) = struct
     | [] -> return base
     | x :: xs -> action x >> monadic_list_iter xs action base
 
+  let rec monadic_seq_iter seq action base =
+    match seq () with
+    | Seq.Nil -> return base
+    | Seq.Cons (x, del_tail) ->
+        action x >> monadic_seq_iter del_tail action base
+
+  let type_of_list = List.map fst
+
+  let method_make_key m_name args =
+    String.concat "" (m_name :: List.map show_data_type (type_of_list args))
+
+  let constructor_make_key cl args =
+    String.concat "" (cl :: List.map show_data_type (type_of_list args))
+
   let system_exception_init hashtable =
     let constructor_table = Hashtbl.create 16 in
     let field_table = Hashtbl.create 16 in
+    let to_string_key = method_make_key "ToString" [] in
     let method_table = Hashtbl.create 16 in
     let to_string : table_method =
       { method_type= String
       ; has_override= true
       ; has_static_mod= false
-      ; method_key= "ToString"
+      ; method_key= to_string_key
       ; args= []
       ; body=
           Option.get
@@ -121,7 +136,7 @@ module ClassLoader (M : MONADERROR) = struct
       ; field_key= "StackTrace"
       ; is_const= false
       ; sub_tree= None } in
-    Hashtbl.add method_table "ToString" to_string ;
+    Hashtbl.add method_table to_string_key to_string ;
     Hashtbl.add field_table "Message" message ;
     Hashtbl.add field_table "StackTrace" stack_trace ;
     Hashtbl.add hashtable "Exception"
@@ -179,13 +194,12 @@ module ClassLoader (M : MONADERROR) = struct
         return ()
     | Class (_, _, _, _) -> error "Wrong class modifiers"
 
-  let type_of_list = List.map fst
-
   let add_default_constructor hashtable =
     Hashtbl.iter
       (fun key some_class ->
         if Hashtbl.length some_class.constructor_table = 0 then
-          Hashtbl.add some_class.constructor_table key
+          let cl_key = constructor_make_key key [] in
+          Hashtbl.add some_class.constructor_table cl_key
             {args= []; body= StatementBlock []})
       hashtable ;
     return hashtable
@@ -219,10 +233,7 @@ module ClassLoader (M : MONADERROR) = struct
                       >> add_var_field ps in
                 field_modifiers_check field_elem >> add_var_field arg_list
             | mod_list, Method (method_type, m_name, args, body) ->
-                let method_key =
-                  String.concat ""
-                    (m_name :: List.map show_data_type (type_of_list args))
-                in
+                let method_key = method_make_key m_name args in
                 let has_override = is_override mod_list in
                 let has_static_mod = is_static mod_list in
                 field_modifiers_check field_elem
@@ -236,9 +247,7 @@ module ClassLoader (M : MONADERROR) = struct
                      "Method with this type exists"
                 >> return ()
             | _, Constructor (name, args, body) ->
-                let make_key =
-                  String.concat ""
-                    (name :: List.map show_data_type (type_of_list args)) in
+                let make_key = constructor_make_key name args in
                 let check_name =
                   if name = class_key then return ()
                   else error "Constructor name error" in
@@ -282,7 +291,7 @@ module ClassLoader (M : MONADERROR) = struct
           | Some _ ->
               error "The class can only be inherited from the Exception class!"
           ) in
-    monadic_list_iter (convert_table_to_list hashtable) helper hashtable
+    monadic_seq_iter (convert_table_to_seq hashtable) helper hashtable
 
   let transfer_fields parent children =
     let exception_transfer_field : table_class -> table_field -> unit t =
@@ -291,8 +300,8 @@ module ClassLoader (M : MONADERROR) = struct
       | None ->
           return (Hashtbl.add child_class.field_table p_field.field_key p_field)
       | _ -> return () in
-    monadic_list_iter
-      (convert_table_to_list parent.field_table)
+    monadic_seq_iter
+      (convert_table_to_seq parent.field_table)
       (exception_transfer_field children)
       ()
 
@@ -304,8 +313,8 @@ module ClassLoader (M : MONADERROR) = struct
           return
             (Hashtbl.add child_class.method_table p_method.method_key p_method)
       | _ -> return () in
-    monadic_list_iter
-      (convert_table_to_list parent.method_table)
+    monadic_seq_iter
+      (convert_table_to_seq parent.method_table)
       (exception_transfer_method children)
       ()
 
@@ -319,8 +328,8 @@ module ClassLoader (M : MONADERROR) = struct
         | None ->
             error "Not overriden method or parent does not exist this method!"
         | _ -> return () ) in
-    monadic_list_iter
-      (convert_table_to_list children.method_table)
+    monadic_seq_iter
+      (convert_table_to_seq children.method_table)
       (check parent) ()
 
   let transfer_to_child : table_class -> table_class -> unit t =
@@ -406,10 +415,13 @@ module Interpreter (M : MONADERROR) = struct
       ; was_thrown= false }
 
   let find_main_class hashtable =
-    List.find
-      (fun elem -> Hashtbl.mem elem.method_table "Main")
-      (convert_table_to_list hashtable)
-    |> fun main_class -> return main_class
+    let filter = Seq.filter (fun cl -> Hashtbl.mem cl.method_table "Main") in
+    match filter (convert_table_to_seq hashtable) () with
+    | Seq.Cons (x, del_tail) -> (
+      match del_tail () with
+      | Seq.Nil -> return x
+      | _ -> error "Can not be two Main methods!" )
+    | _ -> error "Must be one Main method!"
 
   let rec expression_check : expr -> context -> data_type M.t =
    fun cur_expr ctx ->
@@ -633,7 +645,7 @@ module Interpreter (M : MONADERROR) = struct
         match expr_list with
         | [] -> (
           match other with
-          | 1 -> return (List.hd (convert_table_to_list hashtable))
+          | 1 -> return (get_seq_hd (convert_table_to_seq hashtable))
           | _ -> error "Constructor not recognized" )
         | x :: xs ->
             expression_check x ctx
@@ -678,13 +690,13 @@ module Interpreter (M : MONADERROR) = struct
         match expr_list with
         | [] -> (
           match other with
-          | 1 -> return (List.hd (convert_table_to_list hashtable))
+          | 1 -> return (get_seq_hd (convert_table_to_seq hashtable))
           | _ -> (
               Hashtbl_der.filter hashtable (fun _ mt ->
                   startswith mt.method_key m_name)
               |> fun filter_table ->
               match Hashtbl.length filter_table with
-              | 1 -> return (List.hd (convert_table_to_list filter_table))
+              | 1 -> return (get_seq_hd (convert_table_to_seq filter_table))
               | _ -> error "Method not recognized" ) )
         | x :: xs ->
             expression_check x ctx
@@ -1156,8 +1168,32 @@ module Interpreter (M : MONADERROR) = struct
       | Assign (Access (obj, field_name), val_expr) ->
           interprete_expr val_expr ctx
           >>= fun eval_ctx -> update_field obj field_name eval_ctx
+      | PostInc (Access (obj, IdentVar field))
+       |PrefInc (Access (obj, IdentVar field)) ->
+          interprete_expr
+            (Assign
+               ( Access (obj, IdentVar field)
+               , Add (Access (obj, IdentVar field), ConstExpr (VInt 1)) ))
+            ctx
+      | PostInc (IdentVar var_key) | PrefInc (IdentVar var_key) ->
+          interprete_expr
+            (Assign
+               (IdentVar var_key, Add (IdentVar var_key, ConstExpr (VInt 1))))
+            ctx
+      | PostDec (Access (obj_expr, IdentVar field))
+       |PrefDec (Access (obj_expr, IdentVar field)) ->
+          interprete_expr
+            (Assign
+               ( Access (obj_expr, IdentVar field)
+               , Sub (Access (obj_expr, IdentVar field), ConstExpr (VInt 1)) ))
+            ctx
+      | PostDec (IdentVar var_key) | PrefDec (IdentVar var_key) ->
+          interprete_expr
+            (Assign
+               (IdentVar var_key, Sub (IdentVar var_key, ConstExpr (VInt 1))))
+            ctx
       | _ -> error "Incorrect expression!" in
-    raise Not_found
+    expression_check in_expr in_ctx >>= fun _ -> eval_expr in_expr in_ctx
 
   and prepare_table = raise Not_found
   and update_identifier = raise Not_found
