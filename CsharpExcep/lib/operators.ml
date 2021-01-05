@@ -72,7 +72,13 @@ let ( === ) left right =
   | VBool x, VBool y -> VBool (x = y)
   | VVoid, VVoid -> VBool true
   | VString s, VString t -> VBool (s = t)
-  | VClass x, VClass y -> VBool (x = y)
+  | VClass x, VClass y -> (
+    match (x, y) with
+    | ObjNull, ObjNull -> VBool true
+    | ObjNull, _ | _, ObjNull -> VBool false
+    | ( ObjRef {class_key= _; class_table= _; number= xn}
+      , ObjRef {class_key= _; class_table= _; number= yn} ) ->
+        VBool (xn = yn) )
   | _ -> raise (Invalid_argument "Incorrect types for equality!")
 
 let ( !=! ) left right = not_op (left === right)

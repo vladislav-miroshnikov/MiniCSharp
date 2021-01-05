@@ -374,16 +374,15 @@ module Interpreter (M : MONADERROR) = struct
     ; was_return: bool
     ; was_continue: bool
     ; is_main: bool
-    ; is_constructor: bool
+    ; curr_constructor: table_key option
     ; count_of_cycle: int
     ; visibility_level: int
     ; prev_ctx: context option
     ; count_of_obj: int
     ; is_creation: bool
     ; constr_affilation: table_key option
-    ; exception_class: table_class option }
-
-  let sharp_stack = Stack.create
+    ; exception_class: table_class option
+    ; was_thrown: bool }
 
   let context_init current_o variable_table =
     return
@@ -395,14 +394,15 @@ module Interpreter (M : MONADERROR) = struct
       ; was_return= false
       ; was_continue= false
       ; is_main= true
-      ; is_constructor= false
+      ; curr_constructor= None
       ; count_of_cycle= 0
       ; visibility_level= 0
       ; prev_ctx= None
       ; count_of_obj= 0
       ; is_creation= false
       ; constr_affilation= None
-      ; exception_class= None }
+      ; exception_class= None
+      ; was_thrown= false }
 
   let find_main_class hashtable =
     List.find
@@ -550,7 +550,7 @@ module Interpreter (M : MONADERROR) = struct
         | _ -> error "Invalid type: type must be reference" )
     | ClassCreate (class_name, args) -> (
       match get_value_option class_table class_name with
-      | None -> error "Class not found"
+      | None -> error ("Class not found" ^ class_name ^ "\n")
       | Some t_class -> (
         match args with
         | [] -> return (CsClass class_name)
@@ -799,7 +799,8 @@ module Interpreter (M : MONADERROR) = struct
           error "There is no loop to do continue"
         else return {input_ctx with was_continue= true}
     | Throw s_expr ->
-        interprete_expr s_expr input_ctx >>= fun new_ctx -> return new_ctx
+        interprete_expr s_expr {input_ctx with was_thrown= true}
+        >>= fun new_ctx -> return new_ctx
     | Print print_expr ->
         interprete_expr print_expr input_ctx
         >>= fun new_ctx ->
@@ -898,7 +899,8 @@ module Interpreter (M : MONADERROR) = struct
                   inter_expr_list af_list body_ctx
                   >>= fun after_ctx -> loop body_stat af_list after_ctx
             | _ -> error "Incorrect condition type in for statement" in
-        loop body after_list new_ctx
+        loop body after_list
+          {new_ctx with count_of_cycle= input_ctx.count_of_cycle + 1}
     | Return result_op -> (
       match result_op with
       | None when input_ctx.current_meth_type = Void ->
@@ -1045,7 +1047,14 @@ module Interpreter (M : MONADERROR) = struct
               return {ob_ctx with last_expr_result= Some get_field.f_value}
           | _ -> error "Cannot access a field of non-reference type" )
       | Access (obj_expr, CallMethod (m_name, args)) -> (
-          interprete_expr obj_expr ctx
+          let work_ctx w_expr =
+            match w_expr with
+            | Null ->
+                return ctx
+                (*для опознания что это CallMethod*)
+            | _ -> interprete_expr w_expr ctx >>= fun we_ctx -> return we_ctx
+          in
+          work_ctx obj_expr
           >>= fun ob_ctx ->
           let get_obj = Option.get ob_ctx.last_expr_result in
           match get_obj with
@@ -1071,14 +1080,15 @@ module Interpreter (M : MONADERROR) = struct
                     ; was_return= false
                     ; was_continue= false
                     ; is_main= false
-                    ; is_constructor= false
+                    ; curr_constructor= None
                     ; count_of_cycle= 0
                     ; visibility_level= 0
                     ; prev_ctx= Some ctx
                     ; count_of_obj= ctx.count_of_obj
                     ; is_creation= false
                     ; constr_affilation= None
-                    ; exception_class= None }
+                    ; exception_class= None
+                    ; was_thrown= false }
                   >>= fun res_ctx ->
                   (* After processing the method, return the context with the result of the method.
                      If some states of objects changed inside the method, they must change based on the mutability of hash tables
@@ -1089,6 +1099,14 @@ module Interpreter (M : MONADERROR) = struct
                     ; count_of_obj= res_ctx.count_of_obj
                     ; is_creation= false } ) )
           | _ -> error "Cannot access a field of non-reference type" )
+      | CallMethod (m_name, args) ->
+          let get_this_obj =
+            return {ctx with last_expr_result= Some (VClass ctx.current_o)}
+          in
+          (*сводим к случаю выше*)
+          get_this_obj
+          >>= fun new_ctx ->
+          interprete_expr (Access (Null, CallMethod (m_name, args))) new_ctx
       | _ -> raise Not_found in
     raise Not_found
 
