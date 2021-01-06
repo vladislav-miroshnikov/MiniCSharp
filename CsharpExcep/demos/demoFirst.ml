@@ -13,8 +13,7 @@ let parse_input =
         static void Main()
         {
             E3();
-            try Console.WriteLine("hh");
-            finally Console.WriteLine("fff");
+            throw e;
         }
 
         public static void A3()
@@ -22,7 +21,7 @@ let parse_input =
             int x = 0;
             try
             {
-                throw new ShittyExn();
+                throw new cat();
             }
             finally
             {

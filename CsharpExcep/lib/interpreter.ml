@@ -391,8 +391,7 @@ module Interpreter (M : MONADERROR) = struct
     ; prev_ctx: context option
     ; count_of_obj: int
     ; is_creation: bool
-    ; constr_affilation: table_key option
-    ; exception_class: table_class option }
+    ; exception_class: value }
 
   let context_init current_o variable_table =
     return
@@ -408,8 +407,7 @@ module Interpreter (M : MONADERROR) = struct
       ; prev_ctx= None
       ; count_of_obj= 0
       ; is_creation= false
-      ; constr_affilation= None
-      ; exception_class= None }
+      ; exception_class= VVoid }
 
   let find_main_class hashtable =
     Hashtbl_der.filter hashtable (fun _ cl ->
@@ -1095,13 +1093,27 @@ module Interpreter (M : MONADERROR) = struct
       | ConstExpr value -> return {ctx with last_expr_result= value}
       | IdentVar var_id -> (
         match get_value_option ctx.variable_table var_id with
-        | Some id -> return {ctx with last_expr_result= id.var_value}
+        | Some id -> (
+          match ctx.runtime_flag = WasThrown with
+          | false -> return {ctx with last_expr_result= id.var_value}
+          | true ->
+              return
+                { ctx with
+                  last_expr_result= id.var_value
+                ; exception_class= id.var_value } )
         | None -> (
           try
             get_obj_info ctx.current_o
             |> fun (_, table, _) ->
             match get_value_option table var_id with
-            | Some field -> return {ctx with last_expr_result= field.f_value}
+            | Some field -> (
+              match ctx.runtime_flag = WasThrown with
+              | false -> return {ctx with last_expr_result= field.f_value}
+              | true ->
+                  return
+                    { ctx with
+                      last_expr_result= field.f_value
+                    ; exception_class= field.f_value } )
             | None -> error "Field not found"
           with Failure m | Invalid_argument m -> error m ) )
       | Null -> return {ctx with last_expr_result= VClass ObjNull}
@@ -1156,8 +1168,7 @@ module Interpreter (M : MONADERROR) = struct
                     ; prev_ctx= Some ctx
                     ; count_of_obj= ctx.count_of_obj
                     ; is_creation= false
-                    ; constr_affilation= None
-                    ; exception_class= None }
+                    ; exception_class= VVoid }
                     class_table
                   >>= fun res_ctx ->
                   (* After processing the method, return the context with the result of the method.
@@ -1209,7 +1220,7 @@ module Interpreter (M : MONADERROR) = struct
             (Assign
                (IdentVar var_key, Sub (IdentVar var_key, ConstExpr (VInt 1))))
             ctx class_table
-      | ClassCreate (class_name, c_args) ->
+      | ClassCreate (class_name, c_args) -> (
           (* In the type check, the presence has already been checked, we can safely use Option.get *)
           let get_obj = Option.get (get_value_option class_table class_name) in
           constructor_verify get_obj c_args ctx class_table
@@ -1301,8 +1312,7 @@ module Interpreter (M : MONADERROR) = struct
             ; count_of_obj= ctx.count_of_obj + 1
             ; curr_constructor= None
             ; is_creation= false
-            ; constr_affilation= None
-            ; exception_class= None }
+            ; exception_class= VVoid }
           >>= fun initres_ctx ->
           let get_new_var_table =
             try
@@ -1318,15 +1328,23 @@ module Interpreter (M : MONADERROR) = struct
               variable_table= vt
             ; is_creation= true
             ; is_main= false
-            ; constr_affilation= Some get_obj.class_key
             ; curr_constructor= Some constr_r.key }
             class_table
           >>= fun c_ctx ->
-          return
-            { ctx with
-              last_expr_result= VClass c_ctx.current_o
-            ; runtime_flag= NoFlag
-            ; count_of_obj= c_ctx.count_of_obj }
+          match c_ctx.runtime_flag = WasThrown with
+          | false ->
+              return
+                { ctx with
+                  last_expr_result= VClass c_ctx.current_o
+                ; runtime_flag= NoFlag
+                ; count_of_obj= c_ctx.count_of_obj }
+          | true ->
+              return
+                { ctx with
+                  last_expr_result= VClass c_ctx.current_o
+                ; runtime_flag= NoFlag
+                ; count_of_obj= c_ctx.count_of_obj
+                ; exception_class= VClass c_ctx.current_o } )
       | _ -> error "Incorrect expression!" in
     expression_check in_expr in_ctx class_table
     >>= fun _ -> eval_expr in_expr in_ctx

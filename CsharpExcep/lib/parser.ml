@@ -135,8 +135,8 @@ module Stat = struct
 
   let rec parse_statement input =
     choice
-      [ continue; break; parse_expr; return_stat; if_stat; while_stat
-      ; var_declare; for_stat; throw; stat_block; print_func; try_stat ]
+      [ continue; break; parse_expr; return_stat; if_stat; while_stat; throw
+      ; var_declare; for_stat; stat_block; print_func; try_stat ]
       input
 
   and if_stat input =

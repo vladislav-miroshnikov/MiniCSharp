@@ -5,16 +5,14 @@
      Method
      (Void, "Main", [],
       StatementBlock ([Expression (CallMethod ("E3", []));
-                       Try
-                       (Print (ConstExpr (VString ("hh"))), [],
-                        Some (Print (ConstExpr (VString ("fff")))))])));
+                       Throw (IdentVar ("e"))])));
     ([Public; Static],
      Method
      (Void, "A3", [],
       StatementBlock ([VarDeclare
                        (None, Int, [("x", Some (ConstExpr (VInt (0))))]);
                        Try
-                       (StatementBlock ([Throw (ClassCreate ("ShittyExn", []))]),
+                       (StatementBlock ([Throw (ClassCreate ("cat", []))]), 
                         [], Some (StatementBlock ([Print (IdentVar ("x"))])));
                        VarDeclare
                        (None, Int, [("a", Some (ConstExpr (VInt (3))))]);
