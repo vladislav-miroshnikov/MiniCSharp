@@ -168,7 +168,7 @@ module ClassLoader (M : MONADERROR) = struct
     | l, f -> (
       match f with
       | Method (Void, "Main", [], _)
-        when is_static l && check_const l && not (is_override l) ->
+        when is_static l && (not (check_const l)) && not (is_override l) ->
           return ()
       | Method (_, "Main", _, _) ->
           error "Only one main method can be in program!"
@@ -391,6 +391,7 @@ module Interpreter (M : MONADERROR) = struct
     ; prev_ctx: context option
     ; count_of_obj: int
     ; is_creation: bool }
+  [@@deriving show {with_path= false}]
 
   let context_init current_o variable_table =
     return
@@ -845,14 +846,15 @@ module Interpreter (M : MONADERROR) = struct
         | _ -> error "Can't throw exceptions not of type VClass" )
     | Try (try_stat, catch_list, finally_stat_o) -> (
         let was_main = input_ctx.is_main in
-        ( match try_stat with
-        | StatementBlock _ ->
-            interprete_stat try_stat
-              (inc_visibility_level {input_ctx with is_main= false})
-              class_table
-            >>= fun t_ctx ->
-            return (dec_visibility_level {t_ctx with is_main= was_main})
-        | _ -> error "Expected { and } in try block!" )
+        let eval_try = function
+          | StatementBlock _ ->
+              interprete_stat try_stat
+                (inc_visibility_level {input_ctx with is_main= false})
+                class_table
+              >>= fun t_ctx ->
+              return (dec_visibility_level {t_ctx with is_main= was_main})
+          | _ -> error "Expected { and } in try block!" in
+        eval_try try_stat
         >>= fun after_try_ctx ->
         match after_try_ctx.runtime_flag = WasThrown with
         | true ->
@@ -1475,4 +1477,20 @@ module Interpreter (M : MONADERROR) = struct
     match (curr_body, curr_class.parent_key) with
     | StatementBlock _, _ -> return curr_body
     | _ -> error "Must be statement block!"
+
+  let interprete_program : (table_key, table_class) Hashtbl.t -> context M.t =
+   fun hashtable ->
+    find_main_class hashtable
+    >>= fun main_class ->
+    context_init
+      (ObjRef
+         { class_key= main_class.class_key
+         ; parent_key= None
+         ; class_table= Hashtbl.create 32
+         ; number= 0 })
+      (Hashtbl.create 32)
+    >>= fun ctx ->
+    let main = Hashtbl.find main_class.method_table "Main" in
+    let body_main = main.body in
+    interprete_stat body_main ctx hashtable
 end
