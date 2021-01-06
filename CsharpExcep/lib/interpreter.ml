@@ -1169,7 +1169,7 @@ module Interpreter (M : MONADERROR) = struct
                   let create_var_table : (table_key, variable) Hashtbl_der.t =
                     Hashtbl.create 128 in
                   ( try
-                      prepare_table create_var_table args meth.args ob_ctx
+                      refresh_table create_var_table args meth.args ob_ctx
                         class_table
                     with Invalid_argument m -> error m )
                   >>= fun (new_table, new_ctx) ->
@@ -1237,58 +1237,56 @@ module Interpreter (M : MONADERROR) = struct
       | ClassCreate (class_name, c_args) ->
           let get_obj = Option.get (get_value_option class_table class_name) in
           constructor_verify get_obj c_args ctx class_table
-          >>= fun constr_r ->
-          let new_field_table : (table_key, field_ref) Hashtbl_der.t =
-            Hashtbl.create 1024 in
-          let rec init_object cl_r init_ctx =
-            let field_tuples = Extractors.get_field_pairs cl_r.dec_tree in
-            let rec helper_init acc_ht help_ctx = function
-              | [] -> return help_ctx
-              | (curr_f_type, f_name, f_expr_o) :: tps ->
-                  let is_mutable_field f_key =
-                    let test_field =
+          >>= fun found_constr ->
+          let rec create_obj par_class init_ctx =
+            let find_p_field = Extractors.get_field_pairs par_class.dec_tree in
+            let rec helper inhelp_ht rec_ctx = function
+              | [] -> return rec_ctx
+              | (cur_field_type, field_name, field_expr_o) :: tail ->
+                  let is_const f_key =
+                    let find_t_field =
                       Option.get (get_value_option get_obj.field_table f_key)
                     in
-                    test_field.is_const in
-                  ( match f_expr_o with
+                    find_t_field.is_const in
+                  ( match field_expr_o with
                   | Some f_expr -> (
-                      expression_check f_expr help_ctx class_table
+                      expression_check f_expr rec_ctx class_table
                       >>= fun expr_type ->
                       let add_field fe =
-                        interprete_expr fe help_ctx class_table
+                        interprete_expr fe rec_ctx class_table
                         >>= fun fe_ctx ->
-                        Hashtbl.add acc_ht f_name
-                          { key= f_name
-                          ; f_type= curr_f_type
+                        Hashtbl.add inhelp_ht field_name
+                          { key= field_name
+                          ; f_type= cur_field_type
                           ; f_value= fe_ctx.last_expr_result
-                          ; is_const= is_mutable_field f_name
+                          ; is_const= is_const field_name
                           ; assignment_count= 1 } ;
-                        return (fe_ctx, acc_ht) in
+                        return (fe_ctx, inhelp_ht) in
                       match expr_type with
                       | CsClass "null" -> (
-                        match curr_f_type with
+                        match cur_field_type with
                         | CsClass _ -> add_field f_expr
-                        | _ -> error "Wrong assign type in field declaration" )
+                        | _ -> error "Incorrect type of variable assignment" )
                       | CsClass cright -> (
-                        match curr_f_type with
+                        match cur_field_type with
                         | CsClass cleft ->
                             assign_verify_polymorphic cleft cright class_table
                             >>= fun _ -> add_field f_expr
-                        | _ -> error "Wrong assign type in field declaration" )
-                      | _ when expr_type = curr_f_type -> add_field f_expr
-                      | _ -> error "Wrong assign type in declaration" )
+                        | _ -> error "Incorrect type of variable assignment" )
+                      | _ when expr_type = cur_field_type -> add_field f_expr
+                      | _ -> error "Incorrect type of variable assignment" )
                   | None ->
-                      Hashtbl.add acc_ht f_name
-                        { key= f_name
-                        ; f_type= curr_f_type
-                        ; f_value= get_default_value curr_f_type
-                        ; is_const= is_mutable_field f_name
+                      Hashtbl.add inhelp_ht field_name
+                        { key= field_name
+                        ; f_type= cur_field_type
+                        ; f_value= get_default_value cur_field_type
+                        ; is_const= is_const field_name
                         ; assignment_count= 0 } ;
-                      return (help_ctx, acc_ht) )
+                      return (rec_ctx, inhelp_ht) )
                   >>= fun (head_ctx, head_ht) ->
                   obj_num head_ctx.current_o
                   >>= fun num ->
-                  helper_init head_ht
+                  helper head_ht
                     { head_ctx with
                       current_o=
                         ObjRef
@@ -1296,24 +1294,23 @@ module Interpreter (M : MONADERROR) = struct
                           ; parent_key= get_obj.parent_key
                           ; class_table= head_ht
                           ; number= num } }
-                    tps in
-            match cl_r.parent_key with
-            | None -> helper_init (Hashtbl.create 100) init_ctx field_tuples
+                    tail in
+            match par_class.parent_key with
+            | None -> helper (Hashtbl.create 128) init_ctx find_p_field
             | Some par_key ->
                 let parent_r =
                   Option.get (get_value_option class_table par_key) in
-                init_object parent_r init_ctx
+                create_obj parent_r init_ctx
                 >>= fun par_ctx ->
-                helper_init
-                  (get_obj_fields par_ctx.current_o)
-                  par_ctx field_tuples in
+                helper (get_obj_fields par_ctx.current_o) par_ctx find_p_field
+          in
           let new_object =
             ObjRef
               { class_key= class_name
               ; parent_key= get_obj.parent_key
               ; class_table= Hashtbl.create 100
               ; number= ctx.count_of_obj + 1 } in
-          init_object get_obj
+          create_obj get_obj
             { current_o= new_object
             ; variable_table= Hashtbl.create 100
             ; last_expr_result= VVoid
@@ -1329,19 +1326,19 @@ module Interpreter (M : MONADERROR) = struct
           >>= fun initres_ctx ->
           let get_new_var_table =
             try
-              prepare_table (Hashtbl.create 100) c_args constr_r.args ctx
+              refresh_table (Hashtbl.create 128) c_args found_constr.args ctx
                 class_table
             with Invalid_argument m -> error m in
           get_new_var_table
           >>= fun (vt, _) ->
-          prepare_constructor constr_r.body get_obj
+          prepare_constructor found_constr.body get_obj
           >>= fun c_body ->
           interprete_stat c_body
             { initres_ctx with
               variable_table= vt
             ; is_creation= true
             ; is_main= false
-            ; curr_constructor= Some constr_r.key }
+            ; curr_constructor= Some found_constr.key }
             class_table
           >>= fun c_ctx ->
           return
@@ -1353,7 +1350,27 @@ module Interpreter (M : MONADERROR) = struct
     expression_check in_expr in_ctx class_table
     >>= fun _ -> eval_expr in_expr in_ctx
 
-  and prepare_table = raise Not_found
+  and refresh_table hashtable args meth_args ctx class_table =
+    return
+      (List.fold_left2
+         (fun (new_ht, hctx) arg pair ->
+           match pair with
+           | h_type, h_name ->
+               interprete_expr arg hctx class_table
+               |> fun new_ctx ->
+               let he_ctx =
+                 try get_ok new_ctx
+                 with Invalid_argument _ ->
+                   raise (Invalid_argument (get_error new_ctx)) in
+               Hashtbl.add new_ht h_name
+                 { var_type= h_type
+                 ; var_key= h_name
+                 ; is_const= false
+                 ; assignment_count= 1
+                 ; var_value= he_ctx.last_expr_result
+                 ; visibility_level= 0 } ;
+               (new_ht, he_ctx))
+         (hashtable, ctx) args meth_args)
 
   and update_identifier var_key value var_ctx =
     if Hashtbl.mem var_ctx.variable_table var_key then (
@@ -1409,41 +1426,41 @@ module Interpreter (M : MONADERROR) = struct
     with Invalid_argument m | Failure m -> error m
 
   and update_object obj field_key value up_ctx =
-    let rec refresh f_ht f_key new_val o_num assign_cnt =
+    let rec refresh field_hashtable f_key new_val ref_num count_assign =
       Hashtbl.iter
         (fun _ field_ref ->
           match field_ref with
           | {f_value= f_val; _} -> (
             match f_val with
             | VClass (ObjRef {class_table= frt; number= fnum; _}) ->
-                ( if fnum = o_num then
+                ( if fnum = ref_num then
                   Option.get (get_value_option frt f_key)
                   |> fun old_field ->
                   Hashtbl.replace frt f_key
                     { old_field with
                       f_value= new_val
-                    ; assignment_count= assign_cnt } ) ;
-                refresh frt f_key new_val o_num assign_cnt
+                    ; assignment_count= count_assign } ) ;
+                refresh frt f_key new_val ref_num count_assign
             | _ -> () ))
-        f_ht in
-    let rec helper_update f_key n_val u_ctx o_num assign_cnt =
+        field_hashtable in
+    let rec helper_update f_key new_val upd_ctx up_num assign_cnt =
       Hashtbl.iter
         (fun _ var ->
           match var.var_value with
           | VClass (ObjRef {class_table= frt; number= fnum; _}) ->
-              if o_num = fnum then (
+              if up_num = fnum then (
                 Option.get (get_value_option frt f_key)
                 |> fun old_field ->
                 Hashtbl.replace frt f_key
-                  {old_field with f_value= n_val; assignment_count= assign_cnt} ;
-                refresh frt f_key n_val o_num assign_cnt )
-              else refresh frt f_key n_val o_num assign_cnt
+                  {old_field with f_value= new_val; assignment_count= assign_cnt} ;
+                refresh frt f_key new_val up_num assign_cnt )
+              else refresh frt f_key new_val up_num assign_cnt
           | _ -> ())
-        u_ctx.variable_table
+        upd_ctx.variable_table
       |> fun () ->
-      match u_ctx.prev_ctx with
+      match upd_ctx.prev_ctx with
       | None -> ()
-      | Some prev_ctx -> helper_update f_key n_val prev_ctx o_num assign_cnt
+      | Some prev_ctx -> helper_update f_key new_val prev_ctx up_num assign_cnt
     in
     try
       get_obj_info obj
