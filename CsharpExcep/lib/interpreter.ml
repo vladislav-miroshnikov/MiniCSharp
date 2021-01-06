@@ -75,6 +75,16 @@ let convert_table_to_seq = Hashtbl.to_seq_values
 let get_seq_hd seq =
   match seq () with Seq.Nil -> raise Not_found | Seq.Cons (el, _) -> el
 
+let type_of_list = List.map fst
+
+let method_make_key m_name args =
+  String.concat "" (m_name :: List.map show_data_type (type_of_list args))
+
+let constructor_make_key cl args =
+  String.concat "" (cl :: List.map show_data_type (type_of_list args))
+
+let to_string_key = method_make_key "ToString" []
+
 module ClassLoader (M : MONADERROR) = struct
   open M
 
@@ -82,6 +92,11 @@ module ClassLoader (M : MONADERROR) = struct
   let is_static = List.mem Static
   let is_public = List.mem Public
   let check_const = List.mem Const
+
+  let get_elem hashtable key =
+    match Hashtbl_der.get_value_option hashtable key with
+    | None -> error "Element dont found in table!"
+    | Some elem -> return elem
 
   let replace_elem_hash_table hashtable key value =
     Hashtbl.replace hashtable key value ;
@@ -98,18 +113,9 @@ module ClassLoader (M : MONADERROR) = struct
     | Seq.Cons (x, del_tail) ->
         action x >> monadic_seq_iter del_tail action base
 
-  let type_of_list = List.map fst
-
-  let method_make_key m_name args =
-    String.concat "" (m_name :: List.map show_data_type (type_of_list args))
-
-  let constructor_make_key cl args =
-    String.concat "" (cl :: List.map show_data_type (type_of_list args))
-
   let system_exception_init hashtable =
     let constructor_table = Hashtbl.create 16 in
     let field_table = Hashtbl.create 16 in
-    let to_string_key = method_make_key "ToString" [] in
     let method_table = Hashtbl.create 16 in
     let to_string : table_method =
       { method_type= String
@@ -333,18 +339,18 @@ module ClassLoader (M : MONADERROR) = struct
       (convert_table_to_seq children.method_table)
       (check parent) ()
 
-  let transfer_to_child : table_class -> table_class -> unit t =
-   fun parent children ->
+  let transfer_to_child parent children =
     transfer_fields parent children
     >> transfer_methods parent children
     >> check_override_mod parent children
 
   let begin_inheritance_from_exception hashtable =
-    let exception_class = Option.get (get_value_option hashtable "Exception") in
+    get_elem hashtable "Exception"
+    >>= fun ex_cl ->
     let helper child_key =
-      transfer_to_child exception_class
-        (Option.get (get_value_option hashtable child_key)) in
-    monadic_list_iter exception_class.children_keys helper hashtable
+      get_elem hashtable child_key
+      >>= fun child_c -> transfer_to_child ex_cl child_c in
+    monadic_list_iter ex_cl.children_keys helper hashtable
 
   let load_classes class_list class_table =
     match class_list with
@@ -407,6 +413,27 @@ module Interpreter (M : MONADERROR) = struct
       ; prev_ctx= None
       ; count_of_obj= 0
       ; is_creation= false }
+
+  let rec fold_left2 func acc l1 l2 =
+    match (l1, l2) with
+    | [], [] -> return acc
+    | x :: xs, y :: ys -> func acc x y >>= fun res -> fold_left2 func res xs ys
+    | _, _ -> error "Incorrect lists for fold_left2"
+
+  let rec fold_left func acc l =
+    match l with
+    | [] -> return acc
+    | x :: xs -> func acc x >>= fun r -> fold_left func r xs
+
+  let rec fold_right func l acc =
+    match l with
+    | [] -> return acc
+    | x :: xs -> fold_right func xs acc >>= fun r -> func x r
+
+  let get_elem hashtable key =
+    match Hashtbl_der.get_value_option hashtable key with
+    | None -> error "Element dont found in table!"
+    | Some elem -> return elem
 
   let find_main_class hashtable =
     Hashtbl_der.filter hashtable (fun _ cl ->
@@ -529,9 +556,9 @@ module Interpreter (M : MONADERROR) = struct
           match ctx.current_o with
           | ObjNull -> "null"
           | ObjRef {class_key= key; _} -> key in
-        method_verify
-          (Option.get (get_value_option class_table obj_key))
-          method_name args ctx class_table
+        get_elem class_table obj_key
+        >>= fun curr_class ->
+        method_verify curr_class method_name args ctx class_table
         >>= fun t_mth -> return t_mth.method_type
     | Access (calling_obj, IdentVar var_name) -> (
         expression_check calling_obj ctx class_table
@@ -539,10 +566,9 @@ module Interpreter (M : MONADERROR) = struct
         match obj_type with
         | CsClass "null" -> error "NullReferenceException"
         | CsClass obj_key -> (
-            let find_field =
-              get_value_option
-                (Option.get (get_value_option class_table obj_key)).field_table
-                var_name in
+            get_elem class_table obj_key
+            >>= fun found_obj ->
+            let find_field = get_value_option found_obj.field_table var_name in
             match find_field with
             | None -> error "No matching field found"
             | Some found_field -> return found_field.field_type )
@@ -553,9 +579,9 @@ module Interpreter (M : MONADERROR) = struct
         match obj_type with
         | CsClass "null" -> error "NullReferenceException"
         | CsClass obj_key ->
-            method_verify
-              (Option.get (get_value_option class_table obj_key))
-              m_name args ctx class_table
+            get_elem class_table obj_key
+            >>= fun found_obj ->
+            method_verify found_obj m_name args ctx class_table
             >>= fun found_mth -> return found_mth.method_type
         | _ -> error "Invalid type: type must be reference" )
     | ClassCreate (class_name, args) -> (
@@ -660,7 +686,7 @@ module Interpreter (M : MONADERROR) = struct
   and classname_verify_polymorphic left_key right_key class_table =
     (*For subtype polymorphism (inclusion polymorphism) while passing parameters*)
     let rec check_par key =
-      let get_p = Option.get (get_value_option class_table key) in
+      let get_p = get_ok (get_elem class_table key) in
       if get_p.class_key = left_key then true
       else match get_p.parent_key with None -> false | Some pk -> check_par pk
     in
@@ -741,6 +767,14 @@ module Interpreter (M : MONADERROR) = struct
     | _ when not var.is_const -> return ()
     | _ -> error "Assignment to a constant field"
 
+  let expr_in_stat = function
+    | PostDec _ | PostInc _ | PrefDec _ | PrefInc _
+     |CallMethod (_, _)
+     |Access (_, CallMethod (_, _))
+     |Assign (_, _) ->
+        true
+    | _ -> false
+
   let rec interprete_stat stat input_ctx class_table =
     match stat with
     | StatementBlock stat_list ->
@@ -804,13 +838,13 @@ module Interpreter (M : MONADERROR) = struct
                   return
                     { new_ctx with
                       count_of_nested_cycle= ctx.count_of_nested_cycle - 1 } )
-            | VBool true ->
+            | VBool true -> (
                 interprete_stat l_stat new_ctx class_table
                 >>= fun g_ctx ->
-                if g_ctx.runtime_flag = WasReturn then return g_ctx
-                else if g_ctx.runtime_flag = WasContinue then
-                  loop l_stat {g_ctx with runtime_flag= NoFlag}
-                else loop l_stat g_ctx
+                match g_ctx.runtime_flag with
+                | WasReturn -> return g_ctx
+                | WasContinue -> loop l_stat {g_ctx with runtime_flag= NoFlag}
+                | _ -> loop l_stat g_ctx )
             | _ -> error "Incorrect expression type for while stametent" in
         match stat with
         | StatementBlock _ ->
@@ -970,60 +1004,49 @@ module Interpreter (M : MONADERROR) = struct
                     count_of_nested_cycle= cond_ctx.count_of_nested_cycle - 1
                   ; visibility_level= cond_ctx.visibility_level - 1
                   ; is_main= was_main }
-            | VBool true ->
+            | VBool true -> (
                 let rec inter_expr_list e_list as_ctx =
                   match e_list with
                   | [] -> return as_ctx
-                  | x :: xs -> (
-                    match x with
-                    | PostDec _ | PostInc _ | PrefDec _ | PrefInc _
-                     |Assign (_, _)
-                     |CallMethod (_, _)
-                     |Access (_, CallMethod (_, _)) ->
+                  | x :: xs ->
+                      if expr_in_stat x then
                         interprete_expr x as_ctx class_table
                         >>= fun z_ctx -> inter_expr_list xs z_ctx
-                    | _ -> error "Incorrect expression for after body list" )
+                      else error "Incorrect expression for after body list"
                 in
                 interprete_stat body_stat
                   {cond_ctx with visibility_level= new_ctx.visibility_level + 1}
                   class_table
                 >>= fun body_ctx ->
-                if body_ctx.runtime_flag = WasReturn then
-                  return {body_ctx with is_main= was_main}
-                else if body_ctx.runtime_flag = WasContinue then
-                  inter_expr_list af_list body_ctx
-                  >>= fun after_ctx ->
-                  loop body_stat af_list {after_ctx with runtime_flag= NoFlag}
-                else
-                  inter_expr_list af_list body_ctx
-                  >>= fun after_ctx -> loop body_stat af_list after_ctx
+                match body_ctx.runtime_flag with
+                | WasReturn -> return {body_ctx with is_main= was_main}
+                | WasContinue ->
+                    inter_expr_list af_list body_ctx
+                    >>= fun after_ctx ->
+                    loop body_stat af_list {after_ctx with runtime_flag= NoFlag}
+                | _ ->
+                    inter_expr_list af_list body_ctx
+                    >>= fun after_ctx -> loop body_stat af_list after_ctx )
             | _ -> error "Incorrect condition type in for statement" in
         loop body after_list
           { new_ctx with
             count_of_nested_cycle= input_ctx.count_of_nested_cycle + 1 }
-    | Return result_op -> (
-      match result_op with
-      | None when input_ctx.current_meth_type = Void ->
-          return
-            {input_ctx with last_expr_result= VVoid; runtime_flag= WasReturn}
-      | None -> error "Return value error"
-      | Some result ->
-          expression_check result input_ctx class_table
-          >>= fun ret_type ->
-          if ret_type <> input_ctx.current_meth_type then
-            error "Return value error"
-          else
-            interprete_expr result input_ctx class_table
-            >>= fun new_ctx -> return {new_ctx with runtime_flag= WasReturn} )
-    | Expression s_expr -> (
-      match s_expr with
-      | PostDec _ | PostInc _ | PrefDec _ | PrefInc _
-       |CallMethod (_, _)
-       |Access (_, CallMethod (_, _))
-       |Assign (_, _) ->
+    | Return None when input_ctx.current_meth_type = Void ->
+        return {input_ctx with last_expr_result= VVoid; runtime_flag= WasReturn}
+    | Return None -> error "Return value error"
+    | Return (Some result) ->
+        expression_check result input_ctx class_table
+        >>= fun ret_type ->
+        if ret_type <> input_ctx.current_meth_type then
+          error "Return value error"
+        else
+          interprete_expr result input_ctx class_table
+          >>= fun new_ctx -> return {new_ctx with runtime_flag= WasReturn}
+    | Expression s_expr ->
+        if expr_in_stat s_expr then
           interprete_expr s_expr input_ctx class_table
           >>= fun new_ctx -> return new_ctx
-      | _ -> error "Incorrect expression for statement" )
+        else error "Incorrect expression for statement"
     | VarDeclare (modifier, vars_type, var_list) ->
         let check_const : modifier option -> bool = function
           | Some Const -> true
