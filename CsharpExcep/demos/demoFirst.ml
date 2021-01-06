@@ -16,12 +16,13 @@ let parse_input =
             throw e;
         }
 
-        public static void A3()
+        public static void A3(int a, string b)
         {
             int x = 0;
             try
             {
                 throw new cat();
+                
             }
             finally
             {

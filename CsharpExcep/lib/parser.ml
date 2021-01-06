@@ -275,7 +275,7 @@ end
 
 let get_params =
   Expr.define_type
-  >>= fun _type -> Expr.get_variable >>= fun name -> return (_type, name)
+  >>= fun _type -> Expr.ident_obj >>= fun name -> return (_type, name)
 
 let field =
   let helper =

@@ -22,6 +22,7 @@ and obj_ref =
   | ObjNull
   | ObjRef of
       { class_key: string
+      ; parent_key: string option
       ; class_table: (string, field_ref) Hashtbl_der.t
       ; number: int }
 
@@ -79,8 +80,8 @@ and statement =
 
 and field =
   | VariableField of data_type * (string * expr option) list (*example: static int a = 3, b*)
-  | Method of data_type * string * (data_type * expr) list * statement
-  | Constructor of string * (data_type * expr) list * statement
+  | Method of data_type * string * (data_type * string) list * statement
+  | Constructor of string * (data_type * string) list * statement
 [@@deriving show {with_path= false}]
 
 and cs_class =

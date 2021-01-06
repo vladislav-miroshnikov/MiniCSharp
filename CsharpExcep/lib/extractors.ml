@@ -15,7 +15,7 @@ let get_obj_num = function
 
 let get_obj_info = function
   | ObjNull -> raise (Invalid_argument "NullReferenceException")
-  | ObjRef {class_key= key; class_table= table; number= n} -> (key, table, n)
+  | ObjRef {class_key= key; class_table= table; number= n; _} -> (key, table, n)
 
 let get_obj_fields = function
   | ObjNull -> raise (Invalid_argument "NullReferenceException")

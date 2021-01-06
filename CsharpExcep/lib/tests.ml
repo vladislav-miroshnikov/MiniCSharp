@@ -387,7 +387,7 @@ let%test _ =
       ( [Public]
       , Constructor
           ( "Person"
-          , [(String, IdentVar "n")]
+          , [(String, "n")]
           , StatementBlock
               [ Expression (Assign (IdentVar "name", IdentVar "n"))
               ; Expression (Assign (IdentVar "age", ConstExpr (VInt 18))) ] ) )

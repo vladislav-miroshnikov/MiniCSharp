@@ -8,7 +8,7 @@
                        Throw (IdentVar ("e"))])));
     ([Public; Static],
      Method
-     (Void, "A3", [],
+     (Void, "A3", [(Int, "a"); (String, "b")],
       StatementBlock ([VarDeclare
                        (None, Int, [("x", Some (ConstExpr (VInt (0))))]);
                        Try
