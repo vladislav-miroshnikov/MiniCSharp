@@ -35,7 +35,8 @@ end
 
 type table_key = string [@@deriving show]
 
-type table_constructor = {args: (data_type * expr) list; body: statement}
+type table_constructor =
+  {key: table_key; args: (data_type * expr) list; body: statement}
 [@@deriving show {with_path= false}]
 
 type table_field =
@@ -199,7 +200,7 @@ module ClassLoader (M : MONADERROR) = struct
         if Hashtbl.length some_class.constructor_table = 0 then
           let cl_key = constructor_make_key key [] in
           Hashtbl.add some_class.constructor_table cl_key
-            {args= []; body= StatementBlock []})
+            {key= cl_key; args= []; body= StatementBlock []})
       hashtable ;
     return hashtable
 
@@ -252,7 +253,8 @@ module ClassLoader (M : MONADERROR) = struct
                   else error "Constructor name error" in
                 check_name
                 >> field_modifiers_check field_elem
-                >> add_to_table constructor_table make_key {args; body}
+                >> add_to_table constructor_table make_key
+                     {key= make_key; args; body}
                      "Constructor with this type exists"
                 >> return () in
           let add_parent p = match p with None -> None | _ -> p in
@@ -1301,9 +1303,7 @@ module Interpreter (M : MONADERROR) = struct
             ; is_creation= false
             ; constr_affilation= None
             ; exception_class= None }
-          (* Внутри initres_ctx лежит объект с проинициализированными полями, готовый к обработке конструктором *)
           >>= fun initres_ctx ->
-          (* Контекст, в котором должна готовиться таблица аргументов - текущий!!!!*)
           let get_new_var_table =
             try
               prepare_table (Hashtbl.create 100) c_args constr_r.args ctx
@@ -1313,18 +1313,15 @@ module Interpreter (M : MONADERROR) = struct
           >>= fun (vt, _) ->
           prepare_constructor constr_r.body get_obj
           >>= fun c_body ->
-          (* Контекст, в котором исполняется блок - получившийся объект + таблица переменных - аргументы конструктора *)
           interprete_stat c_body
             { initres_ctx with
               variable_table= vt
             ; is_creation= true
             ; is_main= false
             ; constr_affilation= Some get_obj.class_key
-            ; curr_constructor= None }
+            ; curr_constructor= Some constr_r.key }
             class_table
-          (***FIX*)
           >>= fun c_ctx ->
-          (* В итоге возвращем тот же контекст, что и был, с получившимся объектом после исполнения конструктора *)
           return
             { ctx with
               last_expr_result= VClass c_ctx.current_o
@@ -1337,5 +1334,9 @@ module Interpreter (M : MONADERROR) = struct
   and prepare_table = raise Not_found
   and update_identifier = raise Not_found
   and update_field = raise Not_found
-  and prepare_constructor = raise Not_found
+
+  and prepare_constructor curr_body curr_class =
+    match (curr_body, curr_class.parent_key) with
+    | StatementBlock _, _ -> return curr_body
+    | _ -> error "Must be statement block!"
 end
