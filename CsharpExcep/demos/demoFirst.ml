@@ -28,6 +28,8 @@ let parse_input =
             {
                 Console.WriteLine(x);
             }
+            int a = 3;
+            a++;
         }
 
         public static void B3()

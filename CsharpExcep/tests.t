@@ -15,7 +15,10 @@
                        (None, Int, [("x", Some (ConstExpr (VInt (0))))]);
                        Try
                        (StatementBlock ([Throw (ClassCreate ("ShittyExn", []))]),
-                        [], Some (StatementBlock ([Print (IdentVar ("x"))])))])));
+                        [], Some (StatementBlock ([Print (IdentVar ("x"))])));
+                       VarDeclare
+                       (None, Int, [("a", Some (ConstExpr (VInt (3))))]);
+                       Expression (PostInc (IdentVar ("a")))])));
     ([Public; Static],
      Method
      (Void, "B3", [],
