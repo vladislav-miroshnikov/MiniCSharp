@@ -1,4 +1,4 @@
-  $ (cd ../../../default && demos/demoFirst.exe) 
+  $ (cd ../../../../default && demos/demoParser.exe) 
   Class
   ([], "Program", None,
    [([Static],
@@ -67,29 +67,3 @@
      Method
      (Bool, "Filter", [],
       StatementBlock ([Return (Some (CallMethod ("f", [])))])))])
-  $ (cd ../../../default && demos/demoLoad.exe)
-  ------------------- FIRST TEST ------------------
-  { current_o =
-    ObjRef ({ class_key = "Program"; parent_key = None; class_table = [[]]
-                                                        ;
-              number = 0 });
-    variable_table =
-    [["a" ->
-       { var_key = "a"; var_type = Int; var_value = VInt (1); is_const = false;
-         assignment_count = 1; visibility_level = 0 }
-    
-  "b" ->
-   { var_key = "b"; var_type = Int; var_value = VInt (2); is_const = false;
-     assignment_count = 1; visibility_level = 0 }
-  
-  "c" ->
-   { var_key = "c"; var_type = Int; var_value = VInt (3); is_const = false;
-     assignment_count = 1; visibility_level = 0 }
-  
-  ]]
-  ; current_meth_type = Void; last_expr_result = VInt (3);
-  runtime_flag = NoFlag; is_main = true; curr_constructor = None;
-  count_of_nested_cycle = 0; visibility_level = 0; prev_ctx = None;
-  count_of_obj = 0; is_creation = false
-  }
-  

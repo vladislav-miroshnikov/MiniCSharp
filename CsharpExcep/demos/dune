@@ -5,8 +5,8 @@
    (-short-paths))))
 
 (executable
- (name demoFirst)
- (modules demoFirst)
+ (name demoParser)
+ (modules demoParser)
  (libraries CsharpExcep.Lib)
  (preprocess
   (pps ppx_expect ppx_deriving.show ppx_deriving.eq)))
