@@ -1,4 +1,4 @@
-### An implementation of Scheme mini-language
+### An implementation of Scheme mini-language (+ Call-with-current-continuation)
 
 This is a homework for functional programming course.
 
