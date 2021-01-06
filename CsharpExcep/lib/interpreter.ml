@@ -843,7 +843,7 @@ module Interpreter (M : MONADERROR) = struct
             | _ -> error "Cannot implicitly convert type to System.Exception" )
           )
         | _ -> error "Can't throw exceptions not of type VClass" )
-    | Try (try_stat, try_list, finally_stat_o) -> (
+    | Try (try_stat, catch_list, finally_stat_o) -> (
         let was_main = input_ctx.is_main in
         ( match try_stat with
         | StatementBlock _ ->
@@ -855,7 +855,33 @@ module Interpreter (M : MONADERROR) = struct
         | _ -> error "Expected { and } in try block!" )
         >>= fun after_try_ctx ->
         match after_try_ctx.runtime_flag = WasThrown with
-        | true -> raise Not_found
+        | true ->
+            let check_catch_stat = function
+              | StatementBlock _ -> return ()
+              | _ -> error "Expected { and } in catch block!" in
+            let eval_catch = function
+              | None, None, catch_stat ->
+                  check_catch_stat catch_stat
+                  >> interprete_stat catch_stat
+                       {after_try_ctx with runtime_flag= NoFlag}
+                       class_table
+                  >>= fun catch_ctx -> return catch_ctx
+              | None, Some condit, catch_stat ->
+                  interprete_expr condit after_try_ctx class_table
+                  >>= fun filter_ctx ->
+                  check_catch_stat catch_stat
+                  >> interprete_stat catch_stat
+                       {filter_ctx with runtime_flag= NoFlag}
+                       class_table
+                  >>= fun catch_ctx -> return catch_ctx
+              | _ -> raise Not_found in
+            (* let rec eval_catch_list =
+               match catch_list with
+               | [] ->
+               (* | x :: xs -> (eval_catch x >>= fun new_ctx -> match new_ctx.runtime_flag = WasThrown with
+                 |false -> return new_ctx
+                 | true -> raise Not_found *) *)
+            raise Not_found
         | false -> (
           match finally_stat_o with
           | None -> return after_try_ctx
@@ -1181,9 +1207,9 @@ module Interpreter (M : MONADERROR) = struct
           interprete_expr val_expr ctx class_table
           >>= fun eval_ctx ->
           update_identifier var_key eval_ctx.last_expr_result eval_ctx
-      | Assign (Access (obj, field_name), val_expr) ->
+      | Assign (Access (obj, IdentVar field_name), val_expr) ->
           interprete_expr val_expr ctx class_table
-          >>= fun eval_ctx -> update_field obj field_name eval_ctx
+          >>= fun eval_ctx -> update_field obj field_name eval_ctx class_table
       | PostInc (Access (obj, IdentVar field))
        |PrefInc (Access (obj, IdentVar field)) ->
           interprete_expr
@@ -1328,8 +1354,105 @@ module Interpreter (M : MONADERROR) = struct
     >>= fun _ -> eval_expr in_expr in_ctx
 
   and prepare_table = raise Not_found
-  and update_identifier = raise Not_found
-  and update_field = raise Not_found
+
+  and update_identifier var_key value var_ctx =
+    if Hashtbl.mem var_ctx.variable_table var_key then (
+      let get_old =
+        Option.get (get_value_option var_ctx.variable_table var_key) in
+      check_assign_variable get_old
+      >>= fun _ ->
+      Hashtbl.replace var_ctx.variable_table var_key
+        { get_old with
+          var_value= value
+        ; assignment_count= get_old.assignment_count + 1 } ;
+      return var_ctx )
+    else
+      match var_ctx.current_o with
+      | ObjNull -> error "NullReferenceException"
+      | ObjRef {class_table= table; _} ->
+          if Hashtbl.mem table var_key then
+            let get_old = Option.get (get_value_option table var_key) in
+            check_assign_field get_old
+            >>= fun _ ->
+            if var_ctx.is_creation then
+              Hashtbl.replace table var_key
+                {get_old with f_value= var_ctx.last_expr_result}
+              |> fun _ -> return var_ctx
+            else
+              try
+                update_object var_ctx.current_o var_key var_ctx.last_expr_result
+                  var_ctx
+                |> fun _ -> return var_ctx
+              with Invalid_argument m -> error m
+          else error "Variable not found"
+
+  and update_field obj_expr field_name field_ctx class_table =
+    interprete_expr obj_expr field_ctx class_table
+    >>= fun obj_evaled_ctx ->
+    let get_obj = get_obj_value obj_evaled_ctx.last_expr_result in
+    let cal_new_val = field_ctx.last_expr_result in
+    try
+      get_obj_info get_obj
+      |> fun (_, frt, _) ->
+      if Hashtbl.mem frt field_name then
+        let old_field = Option.get (get_value_option frt field_name) in
+        check_assign_field old_field
+        >>= fun _ ->
+        if obj_evaled_ctx.is_creation then
+          Hashtbl.replace frt field_name
+            {old_field with f_value= field_ctx.last_expr_result}
+          |> fun _ -> return obj_evaled_ctx
+        else
+          update_object get_obj field_name cal_new_val obj_evaled_ctx
+          |> fun _ -> return obj_evaled_ctx
+      else error "Field not found in class!"
+    with Invalid_argument m | Failure m -> error m
+
+  and update_object obj field_key value up_ctx =
+    let rec refresh f_ht f_key new_val o_num assign_cnt =
+      Hashtbl.iter
+        (fun _ field_ref ->
+          match field_ref with
+          | {f_value= f_val; _} -> (
+            match f_val with
+            | VClass (ObjRef {class_table= frt; number= fnum; _}) ->
+                ( if fnum = o_num then
+                  Option.get (get_value_option frt f_key)
+                  |> fun old_field ->
+                  Hashtbl.replace frt f_key
+                    { old_field with
+                      f_value= new_val
+                    ; assignment_count= assign_cnt } ) ;
+                refresh frt f_key new_val o_num assign_cnt
+            | _ -> () ))
+        f_ht in
+    let rec helper_update f_key n_val u_ctx o_num assign_cnt =
+      Hashtbl.iter
+        (fun _ var ->
+          match var.var_value with
+          | VClass (ObjRef {class_table= frt; number= fnum; _}) ->
+              if o_num = fnum then (
+                Option.get (get_value_option frt f_key)
+                |> fun old_field ->
+                Hashtbl.replace frt f_key
+                  {old_field with f_value= n_val; assignment_count= assign_cnt} ;
+                refresh frt f_key n_val o_num assign_cnt )
+              else refresh frt f_key n_val o_num assign_cnt
+          | _ -> ())
+        u_ctx.variable_table
+      |> fun () ->
+      match u_ctx.prev_ctx with
+      | None -> ()
+      | Some prev_ctx -> helper_update f_key n_val prev_ctx o_num assign_cnt
+    in
+    try
+      get_obj_info obj
+      |> fun (_, object_frt, object_number) ->
+      let assign_cnt =
+        (Option.get (get_value_option object_frt field_key)).assignment_count
+        + 1 in
+      helper_update field_key value up_ctx object_number assign_cnt
+    with Invalid_argument m -> raise (Invalid_argument m)
 
   and prepare_constructor curr_body curr_class =
     match (curr_body, curr_class.parent_key) with
