@@ -16,9 +16,9 @@ Features in progress (and TODOs):
 - TODO: Interpreter and whatnot
 
 
-#Run:
+### Run:
 
-##Install sbt. 
+#### Install sbt. 
 
 First add the necessary repository with the command:
 
@@ -44,13 +44,13 @@ Finally, install sbt with the command:
 sudo apt-get install sbt -y
 ```
 
-##Run main():
+#### Run main():
 
 ```
 sbt run
 ```
 
-##Run tests:
+#### Run tests:
 
 ```
 sbt test
