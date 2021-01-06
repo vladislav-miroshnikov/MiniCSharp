@@ -137,14 +137,8 @@ module ClassLoader (M : MONADERROR) = struct
     let message : table_field =
       {field_type= String; field_key= "Message"; is_const= false; sub_tree= None}
     in
-    let stack_trace : table_field =
-      { field_type= String
-      ; field_key= "StackTrace"
-      ; is_const= false
-      ; sub_tree= None } in
     Hashtbl.add method_table to_string_key to_string ;
     Hashtbl.add field_table "Message" message ;
-    Hashtbl.add field_table "StackTrace" stack_trace ;
     Hashtbl.add hashtable "Exception"
       { class_key= "Exception"
       ; field_table
@@ -159,10 +153,9 @@ module ClassLoader (M : MONADERROR) = struct
           public class Exception 
           {
             public string Message;
-            public string StackTrace;
             public string ToString()
             {
-                return Message + StackTrace;
+                return Message;
             }
           }
       |})
