@@ -1,0 +1,9 @@
+(executable
+ (name REPL)
+ (public_name Java.Repl)
+ (modules REPL)
+ (libraries Java.Lib))
+
+(cram
+ (deps demos/demoParserFirst.exe demos/demoParserSecond.exe
+   demos/demoClassLoader.exe demos/demoInterpreter.exe))
