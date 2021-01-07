@@ -16,19 +16,14 @@ end
 module type MONADERROR = sig
   include MONAD
 
-  val get_ok : 'a t -> 'a
-  val get_error : 'a t -> string
   val error : string -> 'a t
 end
 
 module Result = struct
-  (*может реализовать интерфейс?*)
   type 'a t = ('a, string) Result.t
 
   let ( >>= ) = Result.bind
   let return = Result.ok
-  let get_ok = Result.get_ok
-  let get_error = Result.get_error
   let error = Result.error
   let ( >> ) x f = x >>= fun _ -> f
 end
@@ -66,8 +61,10 @@ type table_class =
 [@@deriving show {with_path= false}]
 
 let find_substr all_str sub_str =
-  let sub = String.sub all_str 0 (String.length sub_str) in
-  String.equal sub sub_str
+  if String.length sub_str > String.length all_str then false
+  else
+    let sub = String.sub all_str 0 (String.length sub_str) in
+    String.equal sub sub_str
 
 let convert_table_to_seq = Hashtbl.to_seq_values
 
@@ -117,26 +114,49 @@ module ClassLoader (M : MONADERROR) = struct
     let constructor_table = Hashtbl.create 16 in
     let field_table = Hashtbl.create 16 in
     let method_table = Hashtbl.create 16 in
+    let get_body =
+      match
+        apply_parser Stat.stat_block
+          {| 
+              {
+                return Message;
+              }
+
+
+          |}
+      with
+      | None -> error "Error parsing ToString method in Exception class"
+      | Some bd -> return bd in
+    get_body
+    >>= fun body ->
     let to_string : table_method =
       { method_type= String
       ; has_override= true
       ; has_static_mod= false
       ; method_key= to_string_key
       ; args= []
-      ; body=
-          Option.get
-            (apply_parser Stat.stat_block
-               {| 
-              {
-                return Message;
-              }
-
-
-          |})
-      } in
+      ; body } in
     let message : table_field =
       {field_type= String; field_key= "Message"; is_const= false; sub_tree= None}
     in
+    let get_dec =
+      match
+        apply_parser parse_class
+          {|
+          public class Exception 
+          {
+            public string Message;
+            public string ToString()
+            {
+                return Message;
+            }
+          }
+      |}
+      with
+      | None -> error "Error in parsing Exception class"
+      | Some tree -> return tree in
+    get_dec
+    >>= fun dec_tree ->
     Hashtbl.add method_table to_string_key to_string ;
     Hashtbl.add field_table "Message" message ;
     Hashtbl.add hashtable "Exception"
@@ -146,20 +166,7 @@ module ClassLoader (M : MONADERROR) = struct
       ; constructor_table
       ; parent_key= None
       ; children_keys= []
-      ; dec_tree=
-          Option.get
-            (apply_parser parse_class
-               {|
-          public class Exception 
-          {
-            public string Message;
-            public string ToString()
-            {
-                return Message;
-            }
-          }
-      |})
-      } ;
+      ; dec_tree } ;
     return hashtable
 
   let field_modifiers_check pair =
@@ -669,10 +676,14 @@ module Interpreter (M : MONADERROR) = struct
   and classname_verify_polymorphic left_key right_key class_table =
     (*For subtype polymorphism (inclusion polymorphism) while passing parameters*)
     let rec check_par key =
-      let get_p = get_ok (get_elem class_table key) in
-      if get_p.class_key = left_key then true
-      else match get_p.parent_key with None -> false | Some pk -> check_par pk
-    in
+      match get_value_option class_table key with
+      | None -> false
+      | Some get_p -> (
+          if get_p.class_key = left_key then true
+          else
+            match get_p.parent_key with
+            | None -> false
+            | Some pk -> check_par pk ) in
     check_par right_key
 
   and method_verify t_class m_name args g_ctx class_table =
@@ -698,21 +709,19 @@ module Interpreter (M : MONADERROR) = struct
         | [] -> (
           match other with
           | 1 -> return (get_seq_hd (convert_table_to_seq hashtable))
-          | _ -> (
-              Hashtbl_der.filter hashtable (fun _ mt ->
-                  find_substr mt.method_key m_name)
-              |> fun filter_table ->
-              match Hashtbl.length filter_table with
-              | 1 -> return (get_seq_hd (convert_table_to_seq filter_table))
-              | _ -> error "Method not recognized" ) )
+          | _ -> error "Method not recognized" )
         | x :: xs ->
             expression_check x ctx class_table
             >>= fun x_type ->
             helper
               (Hashtbl_der.filter hashtable (check_type pos x_type))
               (pos + 1) xs ctx ) in
+    (*для экономии*)
+    Hashtbl_der.filter t_class.method_table (fun _ mr ->
+        find_substr mr.method_key m_name)
+    |> fun filter_name ->
     helper
-      (Hashtbl_der.filter t_class.method_table (fun _ mr ->
+      (Hashtbl_der.filter filter_name (fun _ mr ->
            List.length mr.args = List.length args))
       0 args g_ctx
 
@@ -1417,7 +1426,9 @@ module Interpreter (M : MONADERROR) = struct
                 update_object var_ctx.current_o var_key var_ctx.last_expr_result
                   var_ctx
                 |> fun _ -> return var_ctx
-              with Invalid_argument m -> error m
+              with
+              | Invalid_argument m -> error m
+              | Not_found -> error "Variable not found"
           else error "Variable not found"
 
   and update_field obj_expr field_name field_ctx class_table =
@@ -1441,7 +1452,9 @@ module Interpreter (M : MONADERROR) = struct
           update_object get_obj field_name cal_new_val obj_evaled_ctx
           |> fun _ -> return obj_evaled_ctx
       else error "Field not found in class!"
-    with Invalid_argument m | Failure m -> error m
+    with
+    | Invalid_argument m | Failure m -> error m
+    | Not_found -> error "Field not found!"
 
   and update_object obj field_key value up_ctx =
     let rec refresh field_hashtable f_key new_val ref_num count_assign =
@@ -1452,12 +1465,13 @@ module Interpreter (M : MONADERROR) = struct
             match f_val with
             | VClass (ObjRef {class_table= fl_table; number= fnum; _}) ->
                 ( if fnum = ref_num then
-                  get_ok (get_elem fl_table f_key)
-                  |> fun old_field ->
-                  Hashtbl.replace fl_table f_key
-                    { old_field with
-                      f_value= new_val
-                    ; assignment_count= count_assign } ) ;
+                  match get_value_option fl_table f_key with
+                  | None -> raise Not_found
+                  | Some old_field ->
+                      Hashtbl.replace fl_table f_key
+                        { old_field with
+                          f_value= new_val
+                        ; assignment_count= count_assign } ) ;
                 refresh fl_table f_key new_val ref_num count_assign
             | _ -> () ))
         field_hashtable in
@@ -1467,11 +1481,14 @@ module Interpreter (M : MONADERROR) = struct
           match var.var_value with
           | VClass (ObjRef {class_table= field_table; number= fnum; _}) ->
               if up_num = fnum then (
-                get_ok (get_elem field_table f_key)
-                |> fun old_field ->
-                Hashtbl.replace field_table f_key
-                  {old_field with f_value= new_val; assignment_count= assign_cnt} ;
-                refresh field_table f_key new_val up_num assign_cnt )
+                match get_value_option field_table f_key with
+                | None -> raise Not_found
+                | Some old_field ->
+                    Hashtbl.replace field_table f_key
+                      { old_field with
+                        f_value= new_val
+                      ; assignment_count= assign_cnt } ;
+                    refresh field_table f_key new_val up_num assign_cnt )
               else refresh field_table f_key new_val up_num assign_cnt
           | _ -> ())
         upd_ctx.variable_table
@@ -1482,8 +1499,10 @@ module Interpreter (M : MONADERROR) = struct
     in
     get_obj_info obj
     |> fun (_, object_frt, object_number) ->
-    let assign_cnt =
-      (get_ok (get_elem object_frt field_key)).assignment_count + 1 in
+    ( match get_value_option object_frt field_key with
+    | None -> raise Not_found
+    | Some f_assign -> f_assign.assignment_count + 1 )
+    |> fun assign_cnt ->
     helper_update field_key value up_ctx object_number assign_cnt
 
   and prepare_constructor curr_body curr_class =
