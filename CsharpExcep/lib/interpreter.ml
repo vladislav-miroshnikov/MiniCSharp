@@ -65,8 +65,8 @@ type table_class =
   ; dec_tree: cs_class }
 [@@deriving show {with_path= false}]
 
-let startswith test_str sub_str =
-  let sub = String.sub test_str 0 (String.length sub_str) in
+let find_substr all_str sub_str =
+  let sub = String.sub all_str 0 (String.length sub_str) in
   String.equal sub sub_str
 
 let convert_table_to_seq = Hashtbl.to_seq_values
@@ -128,7 +128,7 @@ module ClassLoader (M : MONADERROR) = struct
             (apply_parser Stat.stat_block
                {| 
               {
-                return Message + StackTrace;
+                return Message;
               }
 
 
@@ -412,16 +412,6 @@ module Interpreter (M : MONADERROR) = struct
     | [], [] -> return acc
     | x :: xs, y :: ys -> func acc x y >>= fun res -> fold_left2 func res xs ys
     | _, _ -> error "Incorrect lists for fold_left2"
-
-  let rec fold_left func acc l =
-    match l with
-    | [] -> return acc
-    | x :: xs -> func acc x >>= fun r -> fold_left func r xs
-
-  let rec fold_right func l acc =
-    match l with
-    | [] -> return acc
-    | x :: xs -> fold_right func xs acc >>= fun r -> func x r
 
   let get_elem hashtable key =
     match Hashtbl_der.get_value_option hashtable key with
@@ -710,7 +700,7 @@ module Interpreter (M : MONADERROR) = struct
           | 1 -> return (get_seq_hd (convert_table_to_seq hashtable))
           | _ -> (
               Hashtbl_der.filter hashtable (fun _ mt ->
-                  startswith mt.method_key m_name)
+                  find_substr mt.method_key m_name)
               |> fun filter_table ->
               match Hashtbl.length filter_table with
               | 1 -> return (get_seq_hd (convert_table_to_seq filter_table))
@@ -1159,7 +1149,8 @@ module Interpreter (M : MONADERROR) = struct
           let get_obj = ob_ctx.last_expr_result in
           match get_obj with
           | VClass (ObjRef {class_table= table; _}) ->
-              let get_field = Option.get (get_value_option table field_key) in
+              get_elem table field_key
+              >>= fun get_field ->
               return {ob_ctx with last_expr_result= get_field.f_value}
           | _ -> error "Cannot access a field of non-reference type" )
       | Access (obj_expr, CallMethod (m_name, args)) -> (
@@ -1167,7 +1158,8 @@ module Interpreter (M : MONADERROR) = struct
             match w_expr with
             | Null ->
                 return ctx
-                (*для опознания что это CallMethod*)
+                (*для опознания что это CallMethod, ведь мы свели CallMethod к этому случаю,
+                  а там уже будет проинтерпретированный контекст с полученным текущим объектом *)
             | _ ->
                 interprete_expr w_expr ctx class_table
                 >>= fun we_ctx -> return we_ctx in
@@ -1175,42 +1167,50 @@ module Interpreter (M : MONADERROR) = struct
           >>= fun ob_ctx ->
           let get_obj = ob_ctx.last_expr_result in
           match get_obj with
-          | VClass obj -> (
-            match obj with
-            | ObjNull -> error "NullReferenceException"
-            | ObjRef {class_key= cl_k; _} -> (
-              match get_value_option class_table cl_k with
-              | None -> error "Class not found"
-              | Some found_class ->
-                  method_verify found_class m_name args ob_ctx class_table
-                  >>= fun meth ->
-                  let create_var_table : (table_key, variable) Hashtbl_der.t =
-                    Hashtbl.create 128 in
-                  ( try
-                      refresh_table create_var_table args meth.args ob_ctx
-                        class_table
-                    with Invalid_argument m -> error m )
-                  >>= fun (new_table, new_ctx) ->
-                  interprete_stat meth.body
-                    { current_o= obj
-                    ; variable_table= new_table
-                    ; current_meth_type= meth.method_type
-                    ; last_expr_result= VVoid
-                    ; runtime_flag= NoFlag
-                    ; is_main= false
-                    ; curr_constructor= None
-                    ; count_of_nested_cycle= 0
-                    ; visibility_level= 0
-                    ; prev_ctx= Some ctx
-                    ; count_of_obj= ctx.count_of_obj
-                    ; is_creation= false }
-                    class_table
-                  >>= fun res_ctx ->
-                  return
-                    { new_ctx with
-                      last_expr_result= res_ctx.last_expr_result
-                    ; count_of_obj= res_ctx.count_of_obj
-                    ; is_creation= false } ) )
+          | VClass ObjNull -> error "NullReferenceException"
+          | VClass
+              (ObjRef
+                { class_key= cl_k
+                ; class_table= table
+                ; number= num
+                ; parent_key= par_k }) -> (
+            match get_value_option class_table cl_k with
+            | None -> error "Class not found"
+            | Some found_class ->
+                method_verify found_class m_name args ob_ctx class_table
+                >>= fun meth ->
+                let create_var_table : (table_key, variable) Hashtbl_der.t =
+                  Hashtbl.create 128 in
+                ( try
+                    refresh_table create_var_table args meth.args ob_ctx
+                      class_table
+                  with Invalid_argument m -> error m )
+                >>= fun (new_table, new_ctx) ->
+                interprete_stat meth.body
+                  { current_o=
+                      ObjRef
+                        { class_key= cl_k
+                        ; class_table= table
+                        ; number= num
+                        ; parent_key= par_k }
+                  ; variable_table= new_table
+                  ; current_meth_type= meth.method_type
+                  ; last_expr_result= VVoid
+                  ; runtime_flag= NoFlag
+                  ; is_main= false
+                  ; curr_constructor= None
+                  ; count_of_nested_cycle= 0
+                  ; visibility_level= 0
+                  ; prev_ctx= Some ctx
+                  ; count_of_obj= ctx.count_of_obj
+                  ; is_creation= false }
+                  class_table
+                >>= fun res_ctx ->
+                return
+                  { new_ctx with
+                    last_expr_result= res_ctx.last_expr_result
+                  ; count_of_obj= res_ctx.count_of_obj
+                  ; is_creation= false } )
           | _ -> error "Cannot access a field of non-reference type" )
       | CallMethod (m_name, args) ->
           let get_this_obj =
@@ -1253,7 +1253,8 @@ module Interpreter (M : MONADERROR) = struct
                (IdentVar var_key, Sub (IdentVar var_key, ConstExpr (VInt 1))))
             ctx class_table
       | ClassCreate (class_name, c_args) ->
-          let get_obj = Option.get (get_value_option class_table class_name) in
+          get_elem class_table class_name
+          >>= fun get_obj ->
           constructor_verify get_obj c_args ctx class_table
           >>= fun found_constr ->
           let rec create_obj par_class init_ctx =
@@ -1262,14 +1263,14 @@ module Interpreter (M : MONADERROR) = struct
               | [] -> return rec_ctx
               | (cur_field_type, field_name, field_expr_o) :: tail ->
                   let is_const f_key =
-                    let find_t_field =
-                      Option.get (get_value_option get_obj.field_table f_key)
-                    in
-                    find_t_field.is_const in
+                    get_elem get_obj.field_table f_key
+                    >>= fun find_t_field -> return find_t_field.is_const in
                   ( match field_expr_o with
                   | Some f_expr -> (
                       expression_check f_expr rec_ctx class_table
                       >>= fun expr_type ->
+                      is_const field_name
+                      >>= fun const_res ->
                       let add_field fe =
                         interprete_expr fe rec_ctx class_table
                         >>= fun fe_ctx ->
@@ -1277,7 +1278,7 @@ module Interpreter (M : MONADERROR) = struct
                           { key= field_name
                           ; f_type= cur_field_type
                           ; f_value= fe_ctx.last_expr_result
-                          ; is_const= is_const field_name
+                          ; is_const= const_res
                           ; assignment_count= 1 } ;
                         return (fe_ctx, inhelp_ht) in
                       match expr_type with
@@ -1294,11 +1295,13 @@ module Interpreter (M : MONADERROR) = struct
                       | _ when expr_type = cur_field_type -> add_field f_expr
                       | _ -> error "Incorrect type of variable assignment" )
                   | None ->
+                      is_const field_name
+                      >>= fun const_res ->
                       Hashtbl.add inhelp_ht field_name
                         { key= field_name
                         ; f_type= cur_field_type
                         ; f_value= get_default_value cur_field_type
-                        ; is_const= is_const field_name
+                        ; is_const= const_res
                         ; assignment_count= 0 } ;
                       return (rec_ctx, inhelp_ht) )
                   >>= fun (head_ctx, head_ht) ->
@@ -1316,8 +1319,8 @@ module Interpreter (M : MONADERROR) = struct
             match par_class.parent_key with
             | None -> helper (Hashtbl.create 128) init_ctx find_p_field
             | Some par_key ->
-                let parent_r =
-                  Option.get (get_value_option class_table par_key) in
+                get_elem class_table par_key
+                >>= fun parent_r ->
                 create_obj parent_r init_ctx
                 >>= fun par_ctx ->
                 helper (get_obj_fields par_ctx.current_o) par_ctx find_p_field
@@ -1369,31 +1372,26 @@ module Interpreter (M : MONADERROR) = struct
     >>= fun _ -> eval_expr in_expr in_ctx
 
   and refresh_table hashtable args meth_args ctx class_table =
-    return
-      (List.fold_left2
-         (fun (new_ht, hctx) arg pair ->
-           match pair with
-           | h_type, h_name ->
-               interprete_expr arg hctx class_table
-               |> fun new_ctx ->
-               let he_ctx =
-                 try get_ok new_ctx
-                 with Invalid_argument _ ->
-                   raise (Invalid_argument (get_error new_ctx)) in
-               Hashtbl.add new_ht h_name
-                 { var_type= h_type
-                 ; var_key= h_name
-                 ; is_const= false
-                 ; assignment_count= 1
-                 ; var_value= he_ctx.last_expr_result
-                 ; visibility_level= 0 } ;
-               (new_ht, he_ctx))
-         (hashtable, ctx) args meth_args)
+    fold_left2
+      (fun (new_ht, hctx) arg pair ->
+        match pair with
+        | h_type, h_name ->
+            interprete_expr arg hctx class_table
+            >>= fun new_ctx ->
+            Hashtbl.add new_ht h_name
+              { var_type= h_type
+              ; var_key= h_name
+              ; is_const= false
+              ; assignment_count= 1
+              ; var_value= new_ctx.last_expr_result
+              ; visibility_level= 0 } ;
+            return (new_ht, new_ctx))
+      (hashtable, ctx) args meth_args
 
   and update_identifier var_key value var_ctx =
     if Hashtbl.mem var_ctx.variable_table var_key then (
-      let get_old =
-        Option.get (get_value_option var_ctx.variable_table var_key) in
+      get_elem var_ctx.variable_table var_key
+      >>= fun get_old ->
       check_assign_variable get_old
       >>= fun _ ->
       Hashtbl.replace var_ctx.variable_table var_key
@@ -1406,7 +1404,8 @@ module Interpreter (M : MONADERROR) = struct
       | ObjNull -> error "NullReferenceException"
       | ObjRef {class_table= table; _} ->
           if Hashtbl.mem table var_key then
-            let get_old = Option.get (get_value_option table var_key) in
+            get_elem table var_key
+            >>= fun get_old ->
             check_assign_field get_old
             >>= fun _ ->
             if var_ctx.is_creation then
@@ -1428,13 +1427,14 @@ module Interpreter (M : MONADERROR) = struct
     let cal_new_val = field_ctx.last_expr_result in
     try
       get_obj_info get_obj
-      |> fun (_, frt, _) ->
-      if Hashtbl.mem frt field_name then
-        let old_field = Option.get (get_value_option frt field_name) in
+      |> fun (_, fl_table, _) ->
+      if Hashtbl.mem fl_table field_name then
+        get_elem fl_table field_name
+        >>= fun old_field ->
         check_assign_field old_field
         >>= fun _ ->
         if obj_evaled_ctx.is_creation then
-          Hashtbl.replace frt field_name
+          Hashtbl.replace fl_table field_name
             {old_field with f_value= field_ctx.last_expr_result}
           |> fun _ -> return obj_evaled_ctx
         else
@@ -1450,29 +1450,29 @@ module Interpreter (M : MONADERROR) = struct
           match field_ref with
           | {f_value= f_val; _} -> (
             match f_val with
-            | VClass (ObjRef {class_table= frt; number= fnum; _}) ->
+            | VClass (ObjRef {class_table= fl_table; number= fnum; _}) ->
                 ( if fnum = ref_num then
-                  Option.get (get_value_option frt f_key)
+                  get_ok (get_elem fl_table f_key)
                   |> fun old_field ->
-                  Hashtbl.replace frt f_key
+                  Hashtbl.replace fl_table f_key
                     { old_field with
                       f_value= new_val
                     ; assignment_count= count_assign } ) ;
-                refresh frt f_key new_val ref_num count_assign
+                refresh fl_table f_key new_val ref_num count_assign
             | _ -> () ))
         field_hashtable in
     let rec helper_update f_key new_val upd_ctx up_num assign_cnt =
       Hashtbl.iter
         (fun _ var ->
           match var.var_value with
-          | VClass (ObjRef {class_table= frt; number= fnum; _}) ->
+          | VClass (ObjRef {class_table= field_table; number= fnum; _}) ->
               if up_num = fnum then (
-                Option.get (get_value_option frt f_key)
+                get_ok (get_elem field_table f_key)
                 |> fun old_field ->
-                Hashtbl.replace frt f_key
+                Hashtbl.replace field_table f_key
                   {old_field with f_value= new_val; assignment_count= assign_cnt} ;
-                refresh frt f_key new_val up_num assign_cnt )
-              else refresh frt f_key new_val up_num assign_cnt
+                refresh field_table f_key new_val up_num assign_cnt )
+              else refresh field_table f_key new_val up_num assign_cnt
           | _ -> ())
         upd_ctx.variable_table
       |> fun () ->
@@ -1480,14 +1480,11 @@ module Interpreter (M : MONADERROR) = struct
       | None -> ()
       | Some prev_ctx -> helper_update f_key new_val prev_ctx up_num assign_cnt
     in
-    try
-      get_obj_info obj
-      |> fun (_, object_frt, object_number) ->
-      let assign_cnt =
-        (Option.get (get_value_option object_frt field_key)).assignment_count
-        + 1 in
-      helper_update field_key value up_ctx object_number assign_cnt
-    with Invalid_argument m -> raise (Invalid_argument m)
+    get_obj_info obj
+    |> fun (_, object_frt, object_number) ->
+    let assign_cnt =
+      (get_ok (get_elem object_frt field_key)).assignment_count + 1 in
+    helper_update field_key value up_ctx object_number assign_cnt
 
   and prepare_constructor curr_body curr_class =
     match (curr_body, curr_class.parent_key) with
@@ -1507,6 +1504,5 @@ module Interpreter (M : MONADERROR) = struct
       (Hashtbl.create 32)
     >>= fun ctx ->
     let main = Hashtbl.find main_class.method_table "Main" in
-    let body_main = main.body in
-    interprete_stat body_main ctx hashtable
+    interprete_stat main.body ctx hashtable
 end
