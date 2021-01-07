@@ -252,7 +252,7 @@
                                                         ;
               number = 0 });
     variable_table = [[]]
-    ; current_meth_type = Void; last_expr_result = VVoid;
+    ; current_meth_type = Void; last_expr_result = VString ("GoodBye");
     runtime_flag = NoFlag; is_main = true; curr_constructor = None;
     count_of_nested_cycle = 0; visibility_level = 0; prev_ctx = None;
     count_of_obj = 0; is_creation = false }
@@ -601,8 +601,8 @@
      VClass (ObjRef ({ class_key = "ShittyExn";
                        parent_key = Some ("Exception");
                        class_table =
-                       [["Message" ->
-                          { key = "Message"; f_type = String;
+                       [["message" ->
+                          { key = "message"; f_type = String;
                             f_value = VString (""); is_const = false;
                             assignment_count = 0 }
                        
@@ -635,8 +635,8 @@
          VClass (ObjRef ({ class_key = "ShittyExn";
                            parent_key = Some ("Exception");
                            class_table =
-                           [["Message" ->
-                              { key = "Message"; f_type = String;
+                           [["message" ->
+                              { key = "message"; f_type = String;
                                 f_value = VString (""); is_const = false;
                                 assignment_count = 0 }
                            
@@ -654,8 +654,8 @@
   last_expr_result =
   VClass (ObjRef ({ class_key = "ShittyExn"; parent_key = Some ("Exception");
                     class_table =
-                    [["Message" ->
-                       { key = "Message"; f_type = String;
+                    [["message" ->
+                       { key = "message"; f_type = String;
                          f_value = VString (""); is_const = false;
                          assignment_count = 0 }
                     
