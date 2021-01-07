@@ -4,7 +4,7 @@ This is a homework for functional programming course.
 
 License: LGPL
 
-Author: Miroshnikov Vladislav, vladislaw.miroshnikov@gmail.com
+Author:  Miroshnikov Vladislav, vladislaw.miroshnikov@gmail.com
 
 Замечания:
 - 1 Метод Main ничего не принимает, то есть никаких string[] args, потому что массивов и по заданию нет
