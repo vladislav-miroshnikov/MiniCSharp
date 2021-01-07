@@ -6,7 +6,6 @@ type value =
   | VBool of bool
   | VVoid
   | VNull
-  | VChar of char
   | VString of string
   | VClass of obj_ref
 [@@deriving show {with_path= false}]

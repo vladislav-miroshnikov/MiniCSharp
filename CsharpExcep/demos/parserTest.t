@@ -1,30 +1,24 @@
   $ (cd ../../../../default && demos/demoParser.exe) 
   Class
-  ([], "Program", None,
+  ([Public], "Program", None,
    [([Static],
      Method
-     (Void, "Main", [],
-      StatementBlock ([Expression (CallMethod ("E3", []));
-                       Throw (IdentVar ("e"))])));
+     (Void, "Main", [], StatementBlock ([Expression (CallMethod ("E3", []))])));
     ([Public; Static],
      Method
-     (Void, "A3", [(Int, "a"); (String, "b")],
-      StatementBlock ([VarDeclare
-                       (None, Int, [("x", Some (ConstExpr (VInt (0))))]);
-                       Try
-                       (StatementBlock ([Throw (ClassCreate ("cat", []))]), 
-                        [], Some (StatementBlock ([Print (IdentVar ("x"))])));
-                       VarDeclare
-                       (None, Int, [("a", Some (ConstExpr (VInt (3))))]);
-                       Expression (PostInc (IdentVar ("a")))])));
+     (Void, "A3", [],
+      StatementBlock ([Try
+                       (StatementBlock ([Throw (ClassCreate
+                                                ("ShittyExn",
+                                                 [ConstExpr (VBool (true))]))]),
+                        [], Some (StatementBlock ([])))])));
     ([Public; Static],
      Method
      (Void, "B3", [],
       StatementBlock ([Try
                        (StatementBlock ([Expression (CallMethod ("A3", []))]),
                         [(Some ((CsClass ("ShittyExn"), Some (IdentVar ("e")))),
-                          Some (Access
-                                (IdentVar ("e"), CallMethod ("Filter", []))),
+                          Some (ConstExpr (VBool (false))),
                           StatementBlock ([Print (ConstExpr (VString ("B")))]))],
                         None)])));
     ([Public; Static],
@@ -33,8 +27,7 @@
       StatementBlock ([Try
                        (StatementBlock ([Expression (CallMethod ("B3", []))]),
                         [(Some ((CsClass ("ShittyExn"), Some (IdentVar ("e")))),
-                          Some (Access
-                                (IdentVar ("e"), CallMethod ("Filter", []))),
+                          Some (ConstExpr (VBool (false))),
                           StatementBlock ([Print (ConstExpr (VString ("C")))]))],
                         None)])));
     ([Public; Static],
@@ -43,8 +36,7 @@
       StatementBlock ([Try
                        (StatementBlock ([Expression (CallMethod ("C3", []))]),
                         [(Some ((CsClass ("ShittyExn"), Some (IdentVar ("e")))),
-                          Some (Access
-                                (IdentVar ("e"), CallMethod ("Filter", []))),
+                          Some (ConstExpr (VBool (false))),
                           StatementBlock ([Print (ConstExpr (VString ("D")))]))],
                         None)])));
     ([Public; Static],
@@ -59,11 +51,11 @@
                         None)])))])
   Class
   ([], "ShittyExn", Some ("Exception"),
-   [([Public],
+   [([Public], VariableField (Bool, [("f", None)]));
+    ([Public],
      Constructor
-     ("ShittyExn", [],
-      StatementBlock ([Expression (Assign (IdentVar ("f"), IdentVar ("f")))])));
+     ("ShittyExn", [(Bool, "val")],
+      StatementBlock ([Expression (Assign (IdentVar ("f"), IdentVar ("val")))])));
     ([Public],
      Method
-     (Bool, "Filter", [],
-      StatementBlock ([Return (Some (CallMethod ("f", [])))])))])
+     (Bool, "Filter", [], StatementBlock ([Return (Some (IdentVar ("f")))])))])

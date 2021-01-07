@@ -7,38 +7,33 @@ let print_list =
 let parse_input =
   Option.get
     (apply_parser parser
-       {|  
-    class Program
-    {
-        static void Main()
+       {|
+        public class Program {
+
+            static void Main()
         {
             E3();
-            throw e;
         }
 
-        public static void A3(int a, string b)
+
+        public static void A3()
         {
-            int x = 0;
             try
             {
-                throw new cat();
-                
+                throw new ShittyExn(true);
             }
             finally
             {
-                Console.WriteLine(x);
+                
             }
-            int a = 3;
-            a++;
         }
-
         public static void B3()
         {
             try
             {
                 A3();
             }
-            catch (ShittyExn e) when (e.Filter())
+            catch (ShittyExn e) when (false)
             {
                 Console.WriteLine("B");
             }
@@ -49,7 +44,7 @@ let parse_input =
             {
                 B3();
             }
-            catch (ShittyExn e) when (e.Filter())
+            catch (ShittyExn e) when (false)
             {
                 Console.WriteLine("C");
             }
@@ -60,7 +55,7 @@ let parse_input =
             {
                 C3();
             }
-            catch (ShittyExn e) when (e.Filter())
+            catch (ShittyExn e) when (false)
             {
                 Console.WriteLine("D");
             }
@@ -76,22 +71,21 @@ let parse_input =
                 Console.WriteLine("E");
             }
         }
-
     }
-                class ShittyExn : Exception
+
+    class ShittyExn : Exception
         {
-            
-            public ShittyExn()
+            public bool f;
+            public ShittyExn(bool val)
             {
-                f = f;
+               f = val;
             }
 
             public bool Filter()
             {
-                return f();
+                return f;
             }
         }
-       
-     |})
+        |})
 
 let run_test = print_list (List.map show_cs_class parse_input)

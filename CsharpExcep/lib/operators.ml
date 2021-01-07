@@ -76,9 +76,7 @@ let ( === ) left right =
     match (x, y) with
     | ObjNull, ObjNull -> VBool true
     | ObjNull, _ | _, ObjNull -> VBool false
-    | ( ObjRef {class_key= _; class_table= _; number= xn}
-      , ObjRef {class_key= _; class_table= _; number= yn} ) ->
-        VBool (xn = yn) )
+    | ObjRef {number= xn; _}, ObjRef {number= yn; _} -> VBool (xn = yn) )
   | _ -> raise (Invalid_argument "Incorrect types for equality!")
 
 let ( !=! ) left right = not_op (left === right)

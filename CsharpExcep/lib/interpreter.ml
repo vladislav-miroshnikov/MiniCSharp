@@ -119,7 +119,7 @@ module ClassLoader (M : MONADERROR) = struct
         apply_parser Stat.stat_block
           {| 
               {
-                return Message;
+                return message;
               }
 
 
@@ -137,7 +137,7 @@ module ClassLoader (M : MONADERROR) = struct
       ; args= []
       ; body } in
     let message : table_field =
-      {field_type= String; field_key= "Message"; is_const= false; sub_tree= None}
+      {field_type= String; field_key= "message"; is_const= false; sub_tree= None}
     in
     let get_dec =
       match
@@ -145,10 +145,10 @@ module ClassLoader (M : MONADERROR) = struct
           {|
           public class Exception 
           {
-            public string Message;
+            public string message;
             public string ToString()
             {
-                return Message;
+                return message;
             }
           }
       |}
@@ -158,7 +158,7 @@ module ClassLoader (M : MONADERROR) = struct
     get_dec
     >>= fun dec_tree ->
     Hashtbl.add method_table to_string_key to_string ;
-    Hashtbl.add field_table "Message" message ;
+    Hashtbl.add field_table "message" message ;
     Hashtbl.add hashtable "Exception"
       { class_key= "Exception"
       ; field_table
@@ -264,7 +264,6 @@ module ClassLoader (M : MONADERROR) = struct
                      "Constructor with this type exists"
                 >> return () in
           let add_parent p = match p with None -> None | _ -> p in
-          (*CHECK!!!!!!!*)
           let parent_key = add_parent parent in
           monadic_list_iter fields add_class_elem ()
           >> add_to_table hashtable class_key
@@ -287,7 +286,8 @@ module ClassLoader (M : MONADERROR) = struct
           let parent = get_value_option hashtable key in
           let exception_is_parent = String.compare "Exception" in
           match parent with
-          | None -> error "No parent class found"
+          | None ->
+              error "The class can only be inherited from the Exception class!"
           | Some parent_o when exception_is_parent parent_o.class_key = 0 ->
               (*CHECK THIS!*)
               let new_val =
@@ -750,14 +750,14 @@ module Interpreter (M : MONADERROR) = struct
     match field.assignment_count with
     | 0 -> return ()
     | _ when not field.is_const -> return ()
-    | _ -> error "Assignment to a constant field"
+    | _ -> error "Assigment to a constant field"
 
   let check_assign_variable : variable -> unit M.t =
    fun var ->
     match var.assignment_count with
     | 0 -> return ()
     | _ when not var.is_const -> return ()
-    | _ -> error "Assignment to a constant field"
+    | _ -> error "Assigment to a constant variable"
 
   let expr_in_stat = function
     | PostDec _ | PostInc _ | PrefDec _ | PrefInc _
@@ -787,8 +787,7 @@ module Interpreter (M : MONADERROR) = struct
                    && e_ctx.runtime_flag = WasContinue ->
                 return e_ctx
             | _ when e_ctx.runtime_flag = WasReturn -> return e_ctx
-            | _ when e_ctx.runtime_flag = WasThrown ->
-                return e_ctx (*exception*)
+            | _ when e_ctx.runtime_flag = WasThrown -> return e_ctx
             | _ ->
                 interprete_stat st e_ctx class_table
                 >>= fun head_ctx -> eval_stat tail head_ctx ) in
@@ -867,6 +866,11 @@ module Interpreter (M : MONADERROR) = struct
           | ObjRef ex_obj -> (
             match ex_obj.parent_key with
             | Some "Exception" -> return {new_ctx with runtime_flag= WasThrown}
+            | None -> (
+              match ex_obj.class_key with
+              | "Exception" -> return {new_ctx with runtime_flag= WasThrown}
+              | _ -> error "Cannot implicitly convert type to System.Exception"
+              )
             | _ -> error "Cannot implicitly convert type to System.Exception" )
           )
         | _ -> error "Can't throw exceptions not of type VClass" )
@@ -888,11 +892,21 @@ module Interpreter (M : MONADERROR) = struct
             | StatementBlock _ -> (
               match finally_ctx.runtime_flag = WasReturn with
               | false ->
+                  let save_flag = finally_ctx.runtime_flag in
+                  save_flag
+                  (*очень важно сохранять флаг перед исполнением блока finally, ведь если мы не словили исключения в catch,
+                    то мы не сможем исполнить ни один statement в finally, потому что флаг будет поднят, поэтому мы его на время исполнения опустим,
+                    а после исполнения вернем контекст с тем флагом, который был до этого,
+                    поэтому если до этого флаг был поднят, то после исполнения finally так и останется *)
+                  |> fun s_flag ->
                   interprete_stat finally_stat
-                    (inc_visibility_level {finally_ctx with is_main= false})
+                    (inc_visibility_level
+                       {finally_ctx with is_main= false; runtime_flag= NoFlag})
                     class_table
                   >>= fun f_ctx ->
-                  return (dec_visibility_level {f_ctx with is_main= was_main})
+                  return
+                    (dec_visibility_level
+                       {f_ctx with is_main= was_main; runtime_flag= s_flag})
               | true ->
                   (*особый случай, когда в try был вызван return, в таком случае мы интерпретируем тело finally,
                     но возвращается именно!! тот результат, что был на момент return в try, это как раз в соответствии с самими шарпами*)
@@ -914,6 +928,8 @@ module Interpreter (M : MONADERROR) = struct
             let check_catch_stat = function
               | StatementBlock _ -> return ()
               | _ -> error "Expected { and } in catch block!" in
+            (*рассматриваем все случаи, что были и в парсере, да, немного копипаста, но они все достаточно индивидуальны,
+              поэтому расписаны по отдельности*)
             let eval_catch eval_ctx = function
               | None, None, catch_stat ->
                   check_catch_stat catch_stat
@@ -1047,6 +1063,11 @@ module Interpreter (M : MONADERROR) = struct
                 | _ -> error "Incorrect type of result" )
               | _ -> error "Incorrect catch statement" in
             let rec eval_catch_list = function
+              (*очень важно запускать рекурсивный проход именно на after_try_ctx, потому что если мы не смогли обработать исключение,
+                то мы попортим контекст и потеряем текущий объект исключения, поэтому если мы обработали один catch из списка и
+                он не подошел нам, то забываем испорченный контекст, запускаясь заново на after_try_ctx*)
+
+              (*все случаи были протестированы в тестах*)
               | [] -> return after_try_ctx
               | x :: xs -> (
                   eval_catch after_try_ctx x
@@ -1065,12 +1086,11 @@ module Interpreter (M : MONADERROR) = struct
         let printer = function
           | VInt value -> return (printf "%d\n" value)
           | VBool value -> return (printf "%b\n" value)
-          | VChar value -> return (printf "%c\n" value)
           | VString value -> return (printf "%s\n" value)
           | VClass value -> (
             match value with
             | ObjNull -> error "NullReferenceException"
-            | ObjRef ob -> return (printf "%s" ob.class_key) )
+            | ObjRef ob -> return (printf "%s\n" ob.class_key) )
           | VVoid -> error "Impossible to print void"
           | VNull -> error "Impossible to print null" in
         printer new_ctx.last_expr_result
@@ -1300,19 +1320,9 @@ module Interpreter (M : MONADERROR) = struct
               return {ob_ctx with last_expr_result= get_field.f_value}
           | _ -> error "Cannot access a field of non-reference type" )
       | Access (obj_expr, CallMethod (m_name, args)) -> (
-          let work_ctx w_expr =
-            match w_expr with
-            | Null ->
-                return ctx
-                (*для опознания что это CallMethod, ведь мы свели CallMethod к этому случаю,
-                  а там уже будет проинтерпретированный контекст с полученным текущим объектом *)
-            | _ ->
-                interprete_expr w_expr ctx class_table
-                >>= fun we_ctx -> return we_ctx in
-          work_ctx obj_expr
+          interprete_expr obj_expr ctx class_table
           >>= fun ob_ctx ->
-          let get_obj = ob_ctx.last_expr_result in
-          match get_obj with
+          match ob_ctx.last_expr_result with
           | VClass ObjNull -> error "NullReferenceException"
           | VClass
               (ObjRef
@@ -1360,15 +1370,62 @@ module Interpreter (M : MONADERROR) = struct
                   ; count_of_obj= res_ctx.count_of_obj
                   ; is_creation= false } )
           | _ -> error "Cannot access a field of non-reference type" )
-      | CallMethod (m_name, args) ->
-          let get_this_obj =
+      | CallMethod (m_name, args) -> (
+          let get_curr_o =
             return {ctx with last_expr_result= VClass ctx.current_o} in
-          (*сводим к случаю выше*)
-          get_this_obj
-          >>= fun new_ctx ->
-          interprete_expr
-            (Access (Null, CallMethod (m_name, args)))
-            new_ctx class_table
+          get_curr_o
+          >>= fun ob_ctx ->
+          match ob_ctx.last_expr_result with
+          | VClass ObjNull -> error "NullReferenceException"
+          | VClass
+              (ObjRef
+                { class_key= cl_k
+                ; class_table= table
+                ; number= num
+                ; parent_key= par_k }) -> (
+            match get_value_option class_table cl_k with
+            | None -> error "Class not found"
+            | Some found_class ->
+                method_verify found_class m_name args ob_ctx class_table
+                >>= fun meth ->
+                let create_var_table : (table_key, variable) Hashtbl_der.t =
+                  Hashtbl.create 128 in
+                ( try
+                    refresh_table create_var_table args meth.args ob_ctx
+                      class_table
+                  with Invalid_argument m -> error m )
+                >>= fun (new_table, new_ctx) ->
+                interprete_stat meth.body
+                  { current_o=
+                      ObjRef
+                        { class_key= cl_k
+                        ; class_table= table
+                        ; number= num
+                        ; parent_key= par_k }
+                  ; variable_table= new_table
+                  ; current_meth_type= meth.method_type
+                  ; last_expr_result= VVoid
+                  ; runtime_flag= NoFlag
+                  ; is_main= false
+                  ; curr_constructor= None
+                  ; count_of_nested_cycle= 0
+                  ; visibility_level= 0
+                  ; prev_ctx= Some ctx
+                  ; count_of_obj= ctx.count_of_obj
+                  ; is_creation= false }
+                  class_table
+                >>= fun res_ctx ->
+                let was_throw =
+                  match res_ctx.runtime_flag with
+                  | WasThrown -> WasThrown
+                  | _ -> NoFlag in
+                return
+                  { new_ctx with
+                    last_expr_result= res_ctx.last_expr_result
+                  ; count_of_obj= res_ctx.count_of_obj
+                  ; runtime_flag= was_throw
+                  ; is_creation= false } )
+          | _ -> error "Cannot access a field of non-reference type" )
       | Assign (IdentVar var_key, val_expr) ->
           interprete_expr val_expr ctx class_table
           >>= fun eval_ctx ->
@@ -1663,4 +1720,8 @@ module Interpreter (M : MONADERROR) = struct
     >>= fun ctx ->
     let main = Hashtbl.find main_class.method_table "Main" in
     interprete_stat main.body ctx hashtable
+    >>= fun final_ctx ->
+    match final_ctx.runtime_flag = WasThrown with
+    | false -> return final_ctx
+    | true -> error "Unhandled exception"
 end
