@@ -880,6 +880,33 @@ module Interpreter (M : MONADERROR) = struct
               >>= fun t_ctx ->
               return (dec_visibility_level {t_ctx with is_main= was_main})
           | _ -> error "Expected { and } in try block!" in
+        let eval_finally finally_ctx =
+          match finally_stat_o with
+          | None -> return finally_ctx
+          | Some finally_stat -> (
+            match finally_stat with
+            | StatementBlock _ -> (
+              match finally_ctx.runtime_flag = WasReturn with
+              | false ->
+                  interprete_stat finally_stat
+                    (inc_visibility_level {finally_ctx with is_main= false})
+                    class_table
+                  >>= fun f_ctx ->
+                  return (dec_visibility_level {f_ctx with is_main= was_main})
+              | true ->
+                  (*особый случай, когда в try был вызван return, в таком случае мы интерпретируем тело finally,
+                    но возвращается именно!! тот результат, что был на момент return в try, это как раз в соответствии с самими шарпами*)
+                  let get_return_v = finally_ctx.last_expr_result in
+                  interprete_stat finally_stat
+                    (inc_visibility_level {finally_ctx with is_main= false})
+                    class_table
+                  >>= fun f_ctx ->
+                  return
+                    (dec_visibility_level
+                       { f_ctx with
+                         is_main= was_main
+                       ; last_expr_result= get_return_v }) )
+            | _ -> error "Expected { and } in finally block!" ) in
         eval_try try_stat
         >>= fun after_try_ctx ->
         match after_try_ctx.runtime_flag = WasThrown with
@@ -887,41 +914,151 @@ module Interpreter (M : MONADERROR) = struct
             let check_catch_stat = function
               | StatementBlock _ -> return ()
               | _ -> error "Expected { and } in catch block!" in
-            let eval_catch = function
+            let eval_catch eval_ctx = function
               | None, None, catch_stat ->
                   check_catch_stat catch_stat
                   >> interprete_stat catch_stat
-                       {after_try_ctx with runtime_flag= NoFlag}
+                       (inc_visibility_level
+                          {eval_ctx with runtime_flag= NoFlag; is_main= false})
                        class_table
-                  >>= fun catch_ctx -> return catch_ctx
-              | None, Some condit, catch_stat ->
-                  interprete_expr condit after_try_ctx class_table
+                  >>= fun catch_ctx ->
+                  return
+                    (dec_visibility_level {catch_ctx with is_main= was_main})
+              | None, Some condit, catch_stat -> (
+                  interprete_expr condit eval_ctx class_table
                   >>= fun filter_ctx ->
-                  check_catch_stat catch_stat
-                  >> interprete_stat catch_stat
-                       {filter_ctx with runtime_flag= NoFlag}
-                       class_table
-                  >>= fun catch_ctx -> return catch_ctx
-              | _ -> raise Not_found in
-            (* let rec eval_catch_list =
-               match catch_list with
-               | [] ->
-               (* | x :: xs -> (eval_catch x >>= fun new_ctx -> match new_ctx.runtime_flag = WasThrown with
-                 |false -> return new_ctx
-                 | true -> raise Not_found *) *)
-            raise Not_found
-        | false -> (
-          match finally_stat_o with
-          | None -> return after_try_ctx
-          | Some finally_stat -> (
-            match finally_stat with
-            | StatementBlock _ ->
-                interprete_stat finally_stat
-                  (inc_visibility_level {after_try_ctx with is_main= false})
-                  class_table
-                >>= fun f_ctx ->
-                return (dec_visibility_level {f_ctx with is_main= was_main})
-            | _ -> error "Expected { and } in finally block!" ) ) )
+                  match filter_ctx.last_expr_result with
+                  | VBool true ->
+                      check_catch_stat catch_stat
+                      >> interprete_stat catch_stat
+                           (inc_visibility_level
+                              { filter_ctx with
+                                runtime_flag= NoFlag
+                              ; is_main= false })
+                           class_table
+                      >>= fun catch_ctx ->
+                      return
+                        (dec_visibility_level
+                           {catch_ctx with is_main= was_main})
+                  | _ -> return filter_ctx )
+              | Some (CsClass cl_name, None), None, catch_stat -> (
+                match eval_ctx.last_expr_result with
+                | VClass (ObjRef {class_key= throw_name; _}) ->
+                    if throw_name = cl_name || cl_name = "Exception" then
+                      check_catch_stat catch_stat
+                      >> interprete_stat catch_stat
+                           (inc_visibility_level
+                              { eval_ctx with
+                                runtime_flag= NoFlag
+                              ; is_main= false })
+                           class_table
+                      >>= fun catch_ctx ->
+                      return
+                        (dec_visibility_level
+                           {catch_ctx with is_main= was_main})
+                    else return eval_ctx
+                | _ -> error "Incorrect type of result" )
+              | Some (CsClass cl_name, None), Some condit, catch_stat -> (
+                match eval_ctx.last_expr_result with
+                | VClass (ObjRef {class_key= throw_name; _}) ->
+                    if throw_name = cl_name || cl_name = "Exception" then
+                      interprete_expr condit eval_ctx class_table
+                      >>= fun filter_ctx ->
+                      match filter_ctx.last_expr_result with
+                      | VBool true ->
+                          check_catch_stat catch_stat
+                          >> interprete_stat catch_stat
+                               (inc_visibility_level
+                                  { filter_ctx with
+                                    runtime_flag= NoFlag
+                                  ; is_main= false })
+                               class_table
+                          >>= fun catch_ctx ->
+                          return
+                            (dec_visibility_level
+                               {catch_ctx with is_main= was_main})
+                      | _ -> return filter_ctx
+                    else return eval_ctx
+                | _ -> error "Incorrect type of result" )
+              | ( Some (CsClass cl_name, Some (IdentVar th_ex_name))
+                , None
+                , catch_stat ) -> (
+                match eval_ctx.last_expr_result with
+                | VClass (ObjRef {class_key= throw_name; _}) ->
+                    if throw_name = cl_name || cl_name = "Exception" then
+                      let adder =
+                        Hashtbl.add eval_ctx.variable_table th_ex_name
+                          { var_key= th_ex_name
+                          ; var_type= CsClass cl_name
+                          ; var_value= eval_ctx.last_expr_result
+                          ; is_const= false
+                          ; assignment_count= 0
+                          ; visibility_level= eval_ctx.visibility_level + 1 } ;
+                        return eval_ctx in
+                      adder
+                      >>= fun adder_ctx ->
+                      check_catch_stat catch_stat
+                      >> interprete_stat catch_stat
+                           (inc_visibility_level
+                              { adder_ctx with
+                                runtime_flag= NoFlag
+                              ; is_main= false })
+                           class_table
+                      >>= fun catch_ctx ->
+                      return
+                        (dec_visibility_level
+                           {catch_ctx with is_main= was_main})
+                    else return eval_ctx
+                | _ -> error "Incorrect type of result" )
+              | ( Some (CsClass cl_name, Some (IdentVar th_ex_name))
+                , Some condit
+                , catch_stat ) -> (
+                match eval_ctx.last_expr_result with
+                | VClass (ObjRef {class_key= throw_name; _}) ->
+                    if throw_name = cl_name || cl_name = "Exception" then
+                      let adder =
+                        Hashtbl.add eval_ctx.variable_table th_ex_name
+                          { var_key= th_ex_name
+                          ; var_type= CsClass cl_name
+                          ; var_value= eval_ctx.last_expr_result
+                          ; is_const= false
+                          ; assignment_count= 0
+                          ; visibility_level= eval_ctx.visibility_level + 1 } ;
+                        return eval_ctx in
+                      adder
+                      >>= fun adder_ctx ->
+                      interprete_expr condit adder_ctx class_table
+                      >>= fun filter_ctx ->
+                      match filter_ctx.last_expr_result with
+                      | VBool true ->
+                          check_catch_stat catch_stat
+                          >> interprete_stat catch_stat
+                               (inc_visibility_level
+                                  { filter_ctx with
+                                    runtime_flag= NoFlag
+                                  ; is_main= false })
+                               class_table
+                          >>= fun catch_ctx ->
+                          return
+                            (dec_visibility_level
+                               {catch_ctx with is_main= was_main})
+                      | _ -> return filter_ctx
+                    else return eval_ctx
+                | _ -> error "Incorrect type of result" )
+              | _ -> error "Incorrect catch statement" in
+            let rec eval_catch_list = function
+              | [] -> return after_try_ctx
+              | x :: xs -> (
+                  eval_catch after_try_ctx x
+                  >>= fun new_ctx ->
+                  match new_ctx.runtime_flag = WasThrown with
+                  | false -> return new_ctx
+                  | true -> eval_catch_list xs ) in
+            eval_catch_list catch_list
+            >>= fun handle_ctx ->
+            eval_finally handle_ctx >>= fun end_ctx -> return end_ctx
+        | false -> eval_finally after_try_ctx >>= fun end_ctx -> return end_ctx
+        )
     | Print print_expr ->
         interprete_expr print_expr input_ctx class_table
         >>= fun new_ctx ->
@@ -1217,7 +1354,9 @@ module Interpreter (M : MONADERROR) = struct
                 >>= fun res_ctx ->
                 return
                   { new_ctx with
-                    last_expr_result= res_ctx.last_expr_result
+                    last_expr_result=
+                      ( if meth.method_type = Void then VVoid
+                      else res_ctx.last_expr_result )
                   ; count_of_obj= res_ctx.count_of_obj
                   ; is_creation= false } )
           | _ -> error "Cannot access a field of non-reference type" )
