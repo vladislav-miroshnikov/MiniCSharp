@@ -1615,23 +1615,10 @@
   }
   
   ]]
-  ;
-  last_expr_result =
-  VObjectRef (RObj ({ class_key = "Person";
-                      field_ref_table =
-                      [["age" ->
-                         { key = "age"; f_type = Int; f_value = VInt (27);
-                           is_not_mutable = false; assignment_count = 1 }
-                      
-  "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Bob");
-     is_not_mutable = false; assignment_count = 0 }
-  
-  ]]
-  ; number = 1 })); runtime_signal = NoSignal; curr_method_type = Void;
-  is_main_scope = true; nested_loops_cnt = 0; scope_level = 0;
-  cur_constr_key = None; prev_context = None; obj_created_cnt = 4;
-  is_creation = false; constr_affilation = None
+  ; last_expr_result = VVoid; runtime_signal = NoSignal;
+  curr_method_type = Void; is_main_scope = true; nested_loops_cnt = 0;
+  scope_level = 0; cur_constr_key = None; prev_context = None;
+  obj_created_cnt = 4; is_creation = false; constr_affilation = None
   }
   
   ------------------- SCOPE TEST ------------------
@@ -1758,7 +1745,7 @@
      scope_level = 0 }
   
   ]]
-  ; last_expr_result = VBool (false); runtime_signal = NoSignal;
+  ; last_expr_result = VVoid; runtime_signal = NoSignal;
   curr_method_type = Void; is_main_scope = true; nested_loops_cnt = 0;
   scope_level = 0; cur_constr_key = None; prev_context = None;
   obj_created_cnt = 2; is_creation = false; constr_affilation = None
@@ -1829,23 +1816,10 @@
   }
   
   ]]
-  ;
-  last_expr_result =
-  VObjectRef (RObj ({ class_key = "Person";
-                      field_ref_table =
-                      [["age" ->
-                         { key = "age"; f_type = Int; f_value = VInt (30);
-                           is_not_mutable = false; assignment_count = 1 }
-                      
-  "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Bob");
-     is_not_mutable = false; assignment_count = 0 }
-  
-  ]]
-  ; number = 1 })); runtime_signal = NoSignal; curr_method_type = Void;
-  is_main_scope = true; nested_loops_cnt = 0; scope_level = 0;
-  cur_constr_key = None; prev_context = None; obj_created_cnt = 2;
-  is_creation = false; constr_affilation = None
+  ; last_expr_result = VVoid; runtime_signal = NoSignal;
+  curr_method_type = Void; is_main_scope = true; nested_loops_cnt = 0;
+  scope_level = 0; cur_constr_key = None; prev_context = None;
+  obj_created_cnt = 2; is_creation = false; constr_affilation = None
   }
   
   ------------------- PATTERN VISITOR TEST ------------------
@@ -2005,7 +1979,7 @@
      v_value = VInt (0); scope_level = 0 }
   
   ]]
-  ; last_expr_result = VBool (false); runtime_signal = NoSignal;
+  ; last_expr_result = VVoid; runtime_signal = NoSignal;
   curr_method_type = Void; is_main_scope = true; nested_loops_cnt = 0;
   scope_level = 0; cur_constr_key = None; prev_context = None;
   obj_created_cnt = 2; is_creation = false; constr_affilation = None
