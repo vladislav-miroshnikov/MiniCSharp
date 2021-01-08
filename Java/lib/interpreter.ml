@@ -1499,7 +1499,9 @@ module Main (M : MONADERROR) = struct
                   return
                     {
                       new_ctx with
-                      last_expr_result = m_res_ctx.last_expr_result;
+                      last_expr_result =
+                        ( if mr.m_type = Void then VVoid
+                        else m_res_ctx.last_expr_result );
                       obj_created_cnt = m_res_ctx.obj_created_cnt;
                       is_creation = false;
                     } )
