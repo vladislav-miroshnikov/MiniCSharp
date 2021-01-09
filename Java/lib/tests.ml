@@ -142,13 +142,13 @@ let%test _ =
   = Some (ClassCreate (Name "Car", [ Const (VInt 2); Const (VString "Ford") ]))
 
 let%test _ =
-  apply expression "get(new Sth(), new String[10])"
+  apply expression "get(new Sth(), new char[10])"
   = Some
       (CallMethod
          ( Identifier "get",
            [
              ClassCreate (Name "Sth", []);
-             ArrayCreateSized (String, Const (VInt 10));
+             ArrayCreateSized (Char, Const (VInt 10));
            ] ))
 
 let%test _ =

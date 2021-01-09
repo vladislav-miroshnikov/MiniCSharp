@@ -1,18 +1,13 @@
 type modifier = Public | Static | Final | Abstract | Override
 [@@deriving show { with_path = false }]
 
-type type_t =
-  | Int
-  | Void
-  | ClassName of string
-  | String
-  | Array of type_t
-  | Bool
+type type_t = Int | Void | ClassName of string | Array of type_t | Bool | Char
 [@@deriving show { with_path = false }]
 
 type value =
   | VBool of bool
   | VInt of int
+  | VChar of char
   | VArray of array_ref
   | VVoid
   | VString of string
@@ -39,11 +34,12 @@ and obj_ref =
 
 and array_ref =
   | ANull
-  | Arr of { a_type : type_t; values : value list; number : int }
+  | Arr of { a_type : type_t; values : value list; length : int; number : int }
 
 let get_arr_info_exn = function
   | ANull -> raise (Invalid_argument "NullPointerException")
-  | Arr { a_type = at; values = av; number = an } -> (at, av, an)
+  | Arr { a_type = at; values = av; length = al; number = an } ->
+      (at, av, al, an)
 
 let get_obj_fields_exn = function
   | RNull -> raise (Invalid_argument "NullPointerException")
@@ -60,17 +56,18 @@ let get_obj_info_exn = function
 let get_type_by_value = function
   | VInt _ -> Int
   | VBool _ -> Bool
-  | VString _ -> String
+  | VString _ -> ClassName "String"
   | VVoid -> Void
+  | VChar _ -> Char
   | VObjectRef RNull -> ClassName "null"
   | VObjectRef (RObj { class_key = ck; field_ref_table = _; number = _ }) ->
       ClassName ck
-  | VArray (Arr { a_type = t; values = _; number = _ }) -> Array t
+  | VArray (Arr { a_type = t; _ }) -> Array t
   | VArray ANull -> Array Void
 
 let update_array_val_exn v_arr index new_val =
   match v_arr with
-  | VArray (Arr { a_type = at; values = v_list; number = an }) ->
+  | VArray (Arr { a_type = at; values = v_list; number = an; length = alen }) ->
       let update_list_on_pos pos list new_v =
         List.mapi (fun i old_v -> if i = pos then new_v else old_v) list
       in
@@ -79,17 +76,64 @@ let update_array_val_exn v_arr index new_val =
       in
       if check_value_type at new_val then
         update_list_on_pos index v_list new_val |> fun new_list ->
-        VArray (Arr { a_type = at; values = new_list; number = an })
+        VArray
+          (Arr { a_type = at; values = new_list; number = an; length = alen })
         (* То самое исключение, из-за которого Java/C# - отстой *)
       else raise (Failure "ArrayStoreException")
   | _ -> raise (Invalid_argument "Wrong value for array update!")
 
+let val_to_str =
+  let new_frt = Hashtbl.create 100 in
+  function
+  | VInt x ->
+      let chars =
+        List.map (fun c -> VChar c) (Opal.explode (string_of_int x))
+      in
+      Hashtbl.add new_frt "value"
+        {
+          key = "value";
+          f_type = Array Char;
+          f_value =
+            VArray
+              (Arr
+                 {
+                   a_type = Char;
+                   values = chars;
+                   length = List.length chars;
+                   number = -1;
+                 });
+          is_not_mutable = true;
+          assignment_count = 0;
+        };
+      VObjectRef
+        (RObj { class_key = "String"; field_ref_table = new_frt; number = -1 })
+  | VChar x ->
+      Hashtbl.add new_frt "value"
+        {
+          key = "value";
+          f_type = Array Char;
+          f_value =
+            VArray
+              (Arr
+                 {
+                   a_type = Char;
+                   values = [ VChar x ];
+                   length = 1;
+                   number = -1;
+                 });
+          is_not_mutable = true;
+          assignment_count = 0;
+        };
+      VObjectRef
+        (RObj { class_key = "String"; field_ref_table = new_frt; number = -1 })
+  | _ -> raise (Invalid_argument "Must be int value!")
+
 let ( ++ ) v1 v2 =
   match (v1, v2) with
   | VInt x, VInt y -> VInt (x + y)
-  | VString x, VString y -> VString (x ^ y)
-  | VInt x, VString y -> VString (string_of_int x ^ y)
-  | VString x, VInt y -> VString (x ^ string_of_int y)
+  | VInt x, VChar y -> VInt (x + Char.code y)
+  | VChar x, VInt y -> VInt (Char.code x + y)
+  | VChar x, VChar y -> VInt (Char.code x + Char.code y)
   | _, _ -> raise (Invalid_argument "Wrong argument types for adding!")
 
 let ( -- ) v1 v2 =
@@ -152,8 +196,20 @@ let ( === ) v1 v2 =
   match (v1, v2) with
   | VInt x, VInt y -> VBool (x = y)
   | VBool x, VBool y -> VBool (x = y)
+  | VChar x, VChar y -> VBool (x = y)
   | VVoid, VVoid -> VBool true
   | VString s, VString t -> VBool (s = t)
+  | ( VObjectRef (RObj { class_key = "String"; field_ref_table = frt1; _ }),
+      VObjectRef (RObj { class_key = "String"; field_ref_table = frt2; _ }) )
+    -> (
+      match
+        ( Hashtbl_p.get_elem_if_present frt1 "value",
+          Hashtbl_p.get_elem_if_present frt2 "value" )
+      with
+      | ( Some { f_value = VArray (Arr { values = vl1; _ }); _ },
+          Some { f_value = VArray (Arr { values = vl2; _ }); _ } ) ->
+          VBool (List.for_all2 (fun e1 e2 -> e1 = e2) vl1 vl2)
+      | _, _ -> raise (Invalid_argument "Wrong data in String class!") )
   | VObjectRef x, VObjectRef y -> (
       match (x, y) with
       | RNull, RNull -> VBool true
@@ -168,11 +224,11 @@ let ( !=! ) v1 v2 = not_v (v1 === v2)
 
 let get_init_value_of_type = function
   | Int -> VInt 0
-  | String -> VString ""
   | ClassName _ -> VObjectRef RNull
   | Bool -> VBool false
   | Void -> VVoid
   | Array _ -> VArray ANull
+  | Char -> VChar ' '
 
 type name = Name of string [@@deriving show { with_path = false }]
 
