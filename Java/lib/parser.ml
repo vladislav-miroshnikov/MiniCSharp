@@ -12,9 +12,9 @@ let reserved =
     "final";
     "static";
     "int";
-    "String";
     "void";
     "boolean";
+    "char";
     "for";
     "null";
     "new";
@@ -95,6 +95,13 @@ module Expr = struct
   let%test _ =
     apply constString "\"hello world!\"" = Some (Const (VString "hello world!"))
 
+  let constChar =
+    token "'" >> any >>= fun ch -> token "'" >> return (Const (VChar ch))
+
+  let%test _ = apply constChar "'\n'" = Some (Const (VChar '\n'))
+
+  let%test _ = apply constChar "'c'" = Some (Const (VChar 'c'))
+
   let identifier = ident => fun s -> Identifier s
 
   let%test _ = apply identifier "IdentSample" = Some (Identifier "IdentSample")
@@ -130,7 +137,7 @@ module Expr = struct
   let neq_op = token "!=" >> return (fun x y -> NotEqual (x, y))
 
   let atomic =
-    identifier <|> constInt <|> constString
+    identifier <|> constInt <|> constString <|> constChar
     <|> (token "true" >> return (Const (VBool true)))
     <|> (token "false" >> return (Const (VBool false)))
     <|> null
@@ -148,8 +155,9 @@ module Expr = struct
     choice
       [
         token "int" >> parse_arr_or_type Int;
-        token "String" >> parse_arr_or_type String;
         token "void" >> parse_arr_or_type Void;
+        token "char" >> parse_arr_or_type Char;
+        token "boolean" >> parse_arr_or_type Bool;
         (ident >>= fun class_name -> parse_arr_or_type (ClassName class_name));
       ]
 
@@ -161,14 +169,19 @@ module Expr = struct
 
   let%test _ = apply type_spec_array "void[]" = None
 
+  let%test _ = apply type_spec_array "char[]" = Some (Array Char)
+
+  let%test _ = apply type_spec_array "boolean[]" = Some (Array Bool)
+
   let%test _ = apply type_spec_array "Car[]" = Some (Array (ClassName "Car"))
 
   let type_spec =
     choice
       [
         token "int" >> return Int;
-        token "String" >> return String;
         token "void" >> return Void;
+        token "char" >> return Char;
+        token "boolean" >> return Bool;
         (ident >>= fun class_name -> return (ClassName class_name));
       ]
 
@@ -226,7 +239,8 @@ module Expr = struct
       | other -> FieldAccess (acc, other)
     in
     let f_parse =
-      this <|> parens create_obj <|> arr_access <|> method_call <|> identifier
+      this <|> null <|> parens create_obj <|> arr_access <|> method_call
+      <|> constString <|> identifier
     in
     let n_parse =
       parens create_obj <|> arr_access <|> method_call <|> identifier
@@ -245,13 +259,13 @@ module Expr = struct
       input
 
   and create_obj input =
-    ( token "new" >> name >>= fun class_name ->
+    ( token "new " >> name >>= fun class_name ->
       token "(" >> expr_sep_by_comma >>= fun expr_list ->
       token ")" >> return (ClassCreate (class_name, expr_list)) )
       input
 
   and create_arr input =
-    ( token "new" >> type_spec >>= fun ts ->
+    ( token "new " >> type_spec >>= fun ts ->
       choice
         [
           ( token "[]" >> token "{" >> sep_by1 expression (token ",")
