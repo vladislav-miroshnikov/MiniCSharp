@@ -30,6 +30,43 @@ Features done:
 - 13 Функция печати на консоль
 - 13 Полный набор тестов, и на конструкции мини-языка, и на исключения 
 - 14 ДОП: полиморфизм подтипов (включения) при присваивании объектов
+- 15 REPL + stdlib (стандартная библиотека классов) - в стандартной библиотеке помимо классов на вычисление факториала и фибонначи есть класс пользовательского исключения DivideByZeroException, а также два класса HandleException и UnhandleException, эмулирующие работу с исключениями.
+
+Работа с REPL: Факториал
+```
+REPL # int fac1(int acc, int n) { if (n<=1) return acc; else return fac1(acc*n, n-1);}@
+
+REPL # int fac(int n) {return fac(1,n);}@
+
+REPL # fac(6)@
+
+REPL # Result: VInt (720)
+```
+
+Работа с REPL: HandleException класс
+```
+REPL # HandleException exr = new HandleException();@
+
+REPL # exr.Handle();@
+Exception handled
+IT's ZERO!
+Statement interpreted
+```
+
+Работа с REPL: UnhandleException класс
+```
+REPL # UnhandleException ex = new UnhandleException();@
+
+REPL # ex.Unhandle();@
+Unhandled exception
+```
+
+Работа с REPL: Выброшенное исключение через throw
+```
+REPL # throw new DivideByZeroException();@
+
+Unhandled exception
+```
 
 Класс Exception : 
 ```
@@ -46,8 +83,8 @@ Features done:
 ```
 Features in progress:
 
-- 1 REPL 
-- 2 Stdlib
+- 1 Pretty-printer
+- 2 Трансформации
 
 ##### Замечания по стилю кодирования
 

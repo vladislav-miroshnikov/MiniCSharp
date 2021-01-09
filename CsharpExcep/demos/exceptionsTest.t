@@ -225,7 +225,7 @@
                                                         ;
               number = 0 });
     variable_table = [[]]
-    ; current_meth_type = Void; last_expr_result = VString ("E");
+    ; current_meth_type = Void; last_expr_result = VVoid;
     runtime_flag = NoFlag; is_main = true; curr_constructor = None;
     count_of_nested_cycle = 0; visibility_level = 0; prev_ctx = None;
     count_of_obj = 1; is_creation = false }
@@ -244,10 +244,10 @@
                                                         ;
               number = 0 });
     variable_table = [[]]
-    ; current_meth_type = Void;
-    last_expr_result = VString ("Resuming TrickyTest"); runtime_flag = NoFlag;
-    is_main = true; curr_constructor = None; count_of_nested_cycle = 0;
-    visibility_level = 0; prev_ctx = None; count_of_obj = 2;
-    is_creation = false }
+    ; current_meth_type = Void; last_expr_result = VVoid;
+    runtime_flag = NoFlag; is_main = true; curr_constructor = None;
+    count_of_nested_cycle = 0; visibility_level = 0; prev_ctx = None;
+    count_of_obj = 2; is_creation = false }
   
+ 
  

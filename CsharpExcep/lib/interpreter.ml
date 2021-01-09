@@ -887,40 +887,31 @@ module Interpreter (M : MONADERROR) = struct
         let eval_finally finally_ctx =
           match finally_stat_o with
           | None -> return finally_ctx
-          | Some finally_stat -> (
-            match finally_stat with
-            | StatementBlock _ -> (
-              match finally_ctx.runtime_flag = WasReturn with
-              | false ->
-                  let save_flag = finally_ctx.runtime_flag in
-                  save_flag
-                  (*очень важно сохранять флаг перед исполнением блока finally, ведь если мы не словили исключения в catch,
-                    то мы не сможем исполнить ни один statement в finally, потому что флаг будет поднят, поэтому мы его на время исполнения опустим,
-                    а после исполнения вернем контекст с тем флагом, который был до этого,
-                    поэтому если до этого флаг был поднят, то после исполнения finally так и останется *)
-                  |> fun s_flag ->
-                  interprete_stat finally_stat
-                    (inc_visibility_level
-                       {finally_ctx with is_main= false; runtime_flag= NoFlag})
-                    class_table
-                  >>= fun f_ctx ->
-                  return
-                    (dec_visibility_level
-                       {f_ctx with is_main= was_main; runtime_flag= s_flag})
-              | true ->
-                  (*особый случай, когда в try был вызван return, в таком случае мы интерпретируем тело finally,
-                    но возвращается именно!! тот результат, что был на момент return в try, это как раз в соответствии с самими шарпами*)
-                  let get_return_v = finally_ctx.last_expr_result in
-                  interprete_stat finally_stat
-                    (inc_visibility_level {finally_ctx with is_main= false})
-                    class_table
-                  >>= fun f_ctx ->
-                  return
-                    (dec_visibility_level
-                       { f_ctx with
-                         is_main= was_main
-                       ; last_expr_result= get_return_v }) )
-            | _ -> error "Expected { and } in finally block!" ) in
+          | Some (StatementBlock _ as finally_stat)
+            when finally_ctx.runtime_flag = WasReturn ->
+              let get_return_v = finally_ctx.last_expr_result in
+              interprete_stat finally_stat
+                (inc_visibility_level {finally_ctx with is_main= false})
+                class_table
+              >>= fun f_ctx ->
+              return
+                (dec_visibility_level
+                   {f_ctx with is_main= was_main; last_expr_result= get_return_v})
+          | Some (StatementBlock _ as finally_stat) ->
+              let save_flag = finally_ctx.runtime_flag in
+              (*очень важно сохранять флаг перед исполнением блока finally, ведь если мы не словили исключения в catch,
+                то мы не сможем исполнить ни один statement в finally, потому что флаг будет поднят, поэтому мы его на время исполнения опустим,
+                а после исполнения вернем контекст с тем флагом, который был до этого,
+                поэтому если до этого флаг был поднят, то после исполнения finally так и останется *)
+              interprete_stat finally_stat
+                (inc_visibility_level
+                   {finally_ctx with is_main= false; runtime_flag= NoFlag})
+                class_table
+              >>= fun f_ctx ->
+              return
+                (dec_visibility_level
+                   {f_ctx with is_main= was_main; runtime_flag= save_flag})
+          | _ -> error "Expected { and } in finally block!" in
         eval_try try_stat
         >>= fun after_try_ctx ->
         match after_try_ctx.runtime_flag = WasThrown with
@@ -1332,7 +1323,7 @@ module Interpreter (M : MONADERROR) = struct
                 ; parent_key= par_k }) -> (
             match get_value_option class_table cl_k with
             | None -> error "Class not found"
-            | Some found_class ->
+            | Some found_class -> (
                 method_verify found_class m_name args ob_ctx class_table
                 >>= fun meth ->
                 let create_var_table : (table_key, variable) Hashtbl_der.t =
@@ -1362,13 +1353,22 @@ module Interpreter (M : MONADERROR) = struct
                   ; is_creation= false }
                   class_table
                 >>= fun res_ctx ->
-                return
-                  { new_ctx with
-                    last_expr_result=
-                      ( if meth.method_type = Void then VVoid
-                      else res_ctx.last_expr_result )
-                  ; count_of_obj= res_ctx.count_of_obj
-                  ; is_creation= false } )
+                match res_ctx.runtime_flag with
+                | WasThrown ->
+                    return
+                      { new_ctx with
+                        last_expr_result= res_ctx.last_expr_result
+                      ; count_of_obj= res_ctx.count_of_obj
+                      ; runtime_flag= WasThrown
+                      ; is_creation= false }
+                | _ ->
+                    return
+                      { new_ctx with
+                        last_expr_result=
+                          ( if meth.method_type = Void then VVoid
+                          else res_ctx.last_expr_result )
+                      ; count_of_obj= res_ctx.count_of_obj
+                      ; is_creation= false } ) )
           | _ -> error "Cannot access a field of non-reference type" )
       | CallMethod (m_name, args) -> (
           let get_curr_o =
@@ -1385,7 +1385,7 @@ module Interpreter (M : MONADERROR) = struct
                 ; parent_key= par_k }) -> (
             match get_value_option class_table cl_k with
             | None -> error "Class not found"
-            | Some found_class ->
+            | Some found_class -> (
                 method_verify found_class m_name args ob_ctx class_table
                 >>= fun meth ->
                 let create_var_table : (table_key, variable) Hashtbl_der.t =
@@ -1415,16 +1415,23 @@ module Interpreter (M : MONADERROR) = struct
                   ; is_creation= false }
                   class_table
                 >>= fun res_ctx ->
-                let was_throw =
-                  match res_ctx.runtime_flag with
-                  | WasThrown -> WasThrown
-                  | _ -> NoFlag in
-                return
-                  { new_ctx with
-                    last_expr_result= res_ctx.last_expr_result
-                  ; count_of_obj= res_ctx.count_of_obj
-                  ; runtime_flag= was_throw
-                  ; is_creation= false } )
+                match res_ctx.runtime_flag with
+                | WasThrown ->
+                    return
+                      { new_ctx with
+                        last_expr_result= res_ctx.last_expr_result
+                      ; count_of_obj= res_ctx.count_of_obj
+                      ; runtime_flag= WasThrown
+                      ; is_creation= false }
+                | _ ->
+                    return
+                      { new_ctx with
+                        last_expr_result=
+                          ( if meth.method_type = Void then VVoid
+                            (*чтобы не сохранять в last_expr_result значение не типа VVoid, если метод Void  *)
+                          else res_ctx.last_expr_result )
+                      ; count_of_obj= res_ctx.count_of_obj
+                      ; is_creation= false } ) )
           | _ -> error "Cannot access a field of non-reference type" )
       | Assign (IdentVar var_key, val_expr) ->
           interprete_expr val_expr ctx class_table

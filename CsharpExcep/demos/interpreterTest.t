@@ -252,7 +252,7 @@
                                                         ;
               number = 0 });
     variable_table = [[]]
-    ; current_meth_type = Void; last_expr_result = VString ("GoodBye");
+    ; current_meth_type = Void; last_expr_result = VVoid;
     runtime_flag = NoFlag; is_main = true; curr_constructor = None;
     count_of_nested_cycle = 0; visibility_level = 0; prev_ctx = None;
     count_of_obj = 0; is_creation = false }
