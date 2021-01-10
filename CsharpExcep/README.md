@@ -12,6 +12,7 @@ Author:  Miroshnikov Vladislav, vladislaw.miroshnikov@gmail.com
 - 3 i++ и ++i эквиваленты i = i + 1
 - 4 StackOverflow не детектится
 - 5 foreach не надо, вложенные классы друг в друга не надо
+- 6 Строки как объекты делать не нужно, StartsWith не нужен
 
 Features done:
 
@@ -66,6 +67,12 @@ Unhandled exception
 REPL # throw new DivideByZeroException();@
 
 Unhandled exception
+```
+
+Работа с REPL: Несколько выражений сразу - нужно оборачивать в { }
+```
+REPL # {Console.WriteLine(1); Console.WriteLine(1);}@
+
 ```
 
 Класс Exception : 

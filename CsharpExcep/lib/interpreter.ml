@@ -1261,16 +1261,19 @@ module Interpreter (M : MONADERROR) = struct
         >>= fun right_ctx ->
         let get_left_value = left_ctx.last_expr_result in
         let get_right_value = right_ctx.last_expr_result in
-        let cal_value = operator get_left_value get_right_value in
-        try return {right_ctx with last_expr_result= cal_value} with
+        try
+          let cal_value = operator get_left_value get_right_value in
+          return {right_ctx with last_expr_result= cal_value}
+        with
         | Invalid_argument m -> error m
         | Division_by_zero -> error "Division by zero!" in
       let eval_unar ex_operand operator =
         interprete_expr ex_operand ctx class_table
         >>= fun new_ctx ->
         let get_value = new_ctx.last_expr_result in
-        let cal_unar_v = operator get_value in
-        try return {new_ctx with last_expr_result= cal_unar_v}
+        try
+          let cal_unar_v = operator get_value in
+          return {new_ctx with last_expr_result= cal_unar_v}
         with Invalid_argument m -> error m in
       match e_expr with
       | Add (left, right) -> eval_bin left right ( ++ )

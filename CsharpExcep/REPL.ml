@@ -130,6 +130,12 @@ let () =
   print_endline "At the end of your input you need to type '@' character."
 
 let () =
+  prerr_endline
+    "If you want to submit several expressions at once, then you need to wrap \
+     them in {}.\n\
+     For example: {Console.WriteLine (1); Console.WriteLine (1);} @"
+
+let () =
   print_endline
     "Special commands:\n\
     \ --- show_variable_table@ for showing all information about local variables\n\
