@@ -37,7 +37,7 @@ Features done:
 ```
 REPL # int fac1(int acc, int n) { if (n<=1) return acc; else return fac1(acc*n, n-1);}@
 
-REPL # int fac(int n) {return fac(1,n);}@
+REPL # int fac(int n) {return fac1(1,n);}@
 
 REPL # fac(6)@
 
