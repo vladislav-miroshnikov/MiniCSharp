@@ -1,5 +1,12 @@
-type modifiers = Static | Public | Const | Virtual | Override | Abstract
-[@@deriving show]
+type modifiers =
+  | Static
+  | Public
+  | Const
+  | Virtual
+  | Override
+  | Abstract
+  | Sealed
+[@@deriving show {with_path= false}]
 
 type types =
   | TInt
@@ -7,22 +14,37 @@ type types =
   | TString
   | TClass of string
   | TArray of types
-  | TObject
-[@@deriving show]
+  | TBool
+[@@deriving show {with_path= false}]
 
 type values =
   | VInt of int
   | VBool of bool
-  | VChar of char
-  | VArray of values list
+  | VArray of array_references
   | VString of string
   | VVoid
-  | VNull
-  | VObject
-  | VClass
-[@@deriving show]
+  | VObjectReference of object_references
+[@@deriving show {with_path= false}]
 
-type names = Name of string [@@deriving show]
+and field_references =
+  { key: string
+  ; field_type: types
+  ; field_value: values
+  ; is_const: bool
+  ; assignments_count: int }
+
+and object_references =
+  | NullObjectReference
+  | ObjectReference of
+      { class_key: string
+      ; field_references_table: (string, field_references) Hashtbl_impr.t
+      ; number: int }
+
+and array_references =
+  | NullArrayReference
+  | ArrayReference of {array_type: types; array_values: values list; number: int}
+
+type names = Name of string [@@deriving show {with_path= false}]
 
 type expressions =
   | Add of expressions * expressions
@@ -55,7 +77,7 @@ type expressions =
   | AccessByPoint of expressions * expressions
   | ArrayAccess of expressions * expressions
   | Assign of expressions * expressions
-[@@deriving show]
+[@@deriving show {with_path= false}]
 
 and statements =
   | Expression of expressions
@@ -67,18 +89,17 @@ and statements =
   | Break
   | Continue
   | Return of expressions option
-  | Throw of expressions
-  | VariableDecl of types * (names * expressions option) list
-[@@deriving show]
+  | VariableDecl of modifiers option * types * (names * expressions option) list
+[@@deriving show {with_path= false}]
 
 and fields =
   | Field of types * (names * expressions option) list
   | Method of types * names * (types * names) list * statements option
   | Constructor of
       names * (types * names) list * expressions option * statements
-[@@deriving show]
+[@@deriving show {with_path= false}]
 
 and classes =
   | Class of
       modifiers list * names * names option * (modifiers list * fields) list
-[@@deriving show]
+[@@deriving show {with_path= false}]
