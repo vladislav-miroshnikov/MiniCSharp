@@ -449,15 +449,12 @@
      is_overriden = false }
   
   "equalsClassName (\"Object\")@@" ->
-   { m_type = Int; is_abstract = false; is_overridable = true;
+   { m_type = Bool; is_abstract = false; is_overridable = true;
      has_override_annotation = false;
      args = [(ClassName ("Object"), Name ("obj"))];
      key = "equalsClassName (\"Object\")@@";
      body =
-     Some (StmtBlock ([If
-                       (Equal (This, Identifier ("obj")),
-                        Return (Some (Const (VInt (1)))),
-                        Some (Return (Some (Const (VInt (0))))))]));
+     Some (StmtBlock ([Return (Some (Equal (This, Identifier ("obj"))))]));
      is_overriden = false }
   
   "setCashInt@@" ->
@@ -471,7 +468,7 @@
      is_overriden = false }
   
   "toString@@" ->
-   { m_type = String; is_abstract = false; is_overridable = true;
+   { m_type = ClassName ("String"); is_abstract = false; is_overridable = true;
      has_override_annotation = false; args = []; key = "toString@@";
      body = Some (StmtBlock ([Return (Some (Const (VString ("Object"))))]));
      is_overriden = false }
@@ -606,19 +603,16 @@
                         ;
      method_table =
      [["equalsClassName (\"Object\")@@" ->
-        { m_type = Int; is_abstract = false; is_overridable = true;
+        { m_type = Bool; is_abstract = false; is_overridable = true;
           has_override_annotation = false;
           args = [(ClassName ("Object"), Name ("obj"))];
           key = "equalsClassName (\"Object\")@@";
           body =
-          Some (StmtBlock ([If
-                            (Equal (This, Identifier ("obj")),
-                             Return (Some (Const (VInt (1)))),
-                             Some (Return (Some (Const (VInt (0))))))]));
+          Some (StmtBlock ([Return (Some (Equal (This, Identifier ("obj"))))]));
           is_overriden = false }
      
   "toString@@" ->
-   { m_type = String; is_abstract = false; is_overridable = true;
+   { m_type = ClassName ("String"); is_abstract = false; is_overridable = true;
      has_override_annotation = false; args = []; key = "toString@@";
      body = Some (StmtBlock ([Return (Some (Const (VString ("Object"))))]));
      is_overriden = false }
@@ -662,22 +656,20 @@
                           ;
      method_table =
      [["toString@@" ->
-        { m_type = String; is_abstract = false; is_overridable = true;
-          has_override_annotation = false; args = []; key = "toString@@";
+        { m_type = ClassName ("String"); is_abstract = false;
+          is_overridable = true; has_override_annotation = false; args = [];
+          key = "toString@@";
           body =
           Some (StmtBlock ([Return (Some (Const (VString ("Object"))))]));
           is_overriden = false }
      
   "equalsClassName (\"Object\")@@" ->
-   { m_type = Int; is_abstract = false; is_overridable = true;
+   { m_type = Bool; is_abstract = false; is_overridable = true;
      has_override_annotation = false;
      args = [(ClassName ("Object"), Name ("obj"))];
      key = "equalsClassName (\"Object\")@@";
      body =
-     Some (StmtBlock ([If
-                       (Equal (This, Identifier ("obj")),
-                        Return (Some (Const (VInt (1)))),
-                        Some (Return (Some (Const (VInt (0))))))]));
+     Some (StmtBlock ([Return (Some (Equal (This, Identifier ("obj"))))]));
      is_overriden = false }
   
   ]]
@@ -686,22 +678,410 @@
   [["Object$$" -> { key = "Object$$"; args = []; body = StmtBlock ([]) }
   
   ]]
-  ; children_keys = ["Main"; "Person"]; is_abstract = false;
+  ; children_keys = ["Main"; "String"; "Person"]; is_abstract = false;
   is_inheritable = true; parent_key = None;
   dec_tree =
   Class
   ([Public], Name ("Object"), None,
    [([Public],
      Method
-     (Int, Name ("equals"), [(ClassName ("Object"), Name ("obj"))],
-      Some (StmtBlock ([If
-                        (Equal (This, Identifier ("obj")),
-                         Return (Some (Const (VInt (1)))),
-                         Some (Return (Some (Const (VInt (0))))))]))));
+     (Bool, Name ("equals"), [(ClassName ("Object"), Name ("obj"))],
+      Some (StmtBlock ([Return (Some (Equal (This, Identifier ("obj"))))]))));
     ([Public],
      Method
-     (String, Name ("toString"), [],
+     (ClassName ("String"), Name ("toString"), [],
       Some (StmtBlock ([Return (Some (Const (VString ("Object"))))]))))])
+  }
+  
+  "String" ->
+   { this_key = "String";
+     field_table =
+     [["value" ->
+        { f_type = Array (Char); key = "value"; is_not_mutable = true;
+          sub_tree = None }
+     
+  ]]
+  ;
+  method_table =
+  [["startsWithClassName (\"String\")@@" ->
+     { m_type = Bool; is_abstract = false; is_overridable = true;
+       has_override_annotation = false;
+       args = [(ClassName ("String"), Name ("prefix"))];
+       key = "startsWithClassName (\"String\")@@";
+       body =
+       Some (StmtBlock ([Return (Some (CallMethod
+                                       (Identifier ("startsWith"),
+                                        [Identifier ("prefix");
+                                         Const (VInt (0))])))]));
+       is_overriden = false }
+  
+  "concatClassName (\"String\")@@" ->
+   { m_type = ClassName ("String"); is_abstract = false; is_overridable = true;
+     has_override_annotation = false;
+     args = [(ClassName ("String"), Name ("str"))];
+     key = "concatClassName (\"String\")@@";
+     body =
+     Some (StmtBlock ([VarDec
+                       (None, Int,
+                        [(Name ("otherLen"),
+                          Some (FieldAccess
+                                (Identifier ("str"),
+                                 CallMethod (Identifier ("length"), []))))]);
+                       If
+                       (Equal
+                        (FieldAccess
+                         (Identifier ("str"),
+                          CallMethod (Identifier ("length"), [])),
+                         Const (VInt (0))),
+                        StmtBlock ([Return (Some (This))]), None);
+                       VarDec
+                       (None, Int,
+                        [(Name ("len"),
+                          Some (FieldAccess
+                                (Identifier ("value"), Identifier ("length"))))]);
+                       VarDec
+                       (None, Array (Char),
+                        [(Name ("newValue"),
+                          Some (ArrayCreateSized
+                                (Char,
+                                 Add
+                                 (Identifier ("len"), Identifier ("otherLen")))))]);
+                       For
+                       (Some (VarDec
+                              (None, Int,
+                               [(Name ("i"), Some (Const (VInt (0))))])),
+                        Some (Less (Identifier ("i"), Identifier ("len"))),
+                        [PostInc (Identifier ("i"))],
+                        StmtBlock ([Expression (Assign
+                                                (ArrayAccess
+                                                 (Identifier ("newValue"),
+                                                  Identifier ("i")),
+                                                 ArrayAccess
+                                                 (Identifier ("value"),
+                                                  Identifier ("i"))))]));
+                       For
+                       (Some (VarDec
+                              (None, Int,
+                               [(Name ("j"), Some (Identifier ("len")))])),
+                        Some (Less
+                              (Identifier ("j"),
+                               Add
+                               (Identifier ("len"), Identifier ("otherLen")))),
+                        [PostInc (Identifier ("j"))],
+                        StmtBlock ([Expression (Assign
+                                                (ArrayAccess
+                                                 (Identifier ("newValue"),
+                                                  Identifier ("j")),
+                                                 ArrayAccess
+                                                 (FieldAccess
+                                                  (Identifier ("str"),
+                                                   Identifier ("value")),
+                                                  Sub
+                                                  (Identifier ("j"),
+                                                   Identifier ("len")))))]));
+                       Return (Some (ClassCreate
+                                     (Name ("String"),
+                                      [Identifier ("newValue")])))]));
+     is_overriden = false }
+  
+  "equalsClassName (\"Object\")@@" ->
+   { m_type = Bool; is_abstract = false; is_overridable = true;
+     has_override_annotation = false;
+     args = [(ClassName ("Object"), Name ("obj"))];
+     key = "equalsClassName (\"Object\")@@";
+     body =
+     Some (StmtBlock ([Return (Some (Equal (This, Identifier ("obj"))))]));
+     is_overriden = false }
+  
+  "toString@@" ->
+   { m_type = ClassName ("String"); is_abstract = false; is_overridable = true;
+     has_override_annotation = false; args = []; key = "toString@@";
+     body = Some (StmtBlock ([Return (Some (Const (VString ("Object"))))]));
+     is_overriden = false }
+  
+  "length@@" ->
+   { m_type = Int; is_abstract = false; is_overridable = true;
+     has_override_annotation = false; args = []; key = "length@@";
+     body =
+     Some (StmtBlock ([Return (Some (FieldAccess
+                                     (Identifier ("value"),
+                                      Identifier ("length"))))]));
+     is_overriden = false }
+  
+  "startsWithClassName (\"String\")Int@@" ->
+   { m_type = Bool; is_abstract = false; is_overridable = true;
+     has_override_annotation = false;
+     args = [(ClassName ("String"), Name ("prefix")); (Int, Name ("toffset"))];
+     key = "startsWithClassName (\"String\")Int@@";
+     body =
+     Some (StmtBlock ([VarDec
+                       (None, Array (Char),
+                        [(Name ("ta"), Some (Identifier ("value")))]);
+                       VarDec
+                       (None, Array (Char),
+                        [(Name ("pa"),
+                          Some (FieldAccess
+                                (Identifier ("prefix"), Identifier ("value"))))]);
+                       VarDec
+                       (None, Int,
+                        [(Name ("pc"),
+                          Some (FieldAccess
+                                (Identifier ("prefix"),
+                                 CallMethod (Identifier ("length"), []))))]);
+                       If
+                       (Or
+                        (Less (Identifier ("toffset"), Const (VInt (0))),
+                         More
+                         (Identifier ("toffset"),
+                          Sub
+                          (FieldAccess
+                           (Identifier ("value"), Identifier ("length")),
+                           Identifier ("pc")))),
+                        StmtBlock ([Return (Some (Const (VBool (false))))]),
+                        None);
+                       For
+                       (Some (VarDec
+                              (None, Int,
+                               [(Name ("i"), Some (Identifier ("toffset")))])),
+                        Some (Less
+                              (Identifier ("i"),
+                               Add (Identifier ("toffset"), Identifier ("pc")))),
+                        [PostInc (Identifier ("i"))],
+                        StmtBlock ([If
+                                    (NotEqual
+                                     (ArrayAccess
+                                      (Identifier ("ta"), Identifier ("i")),
+                                      ArrayAccess
+                                      (Identifier ("pa"),
+                                       Sub
+                                       (Identifier ("i"),
+                                        Identifier ("toffset")))),
+                                     StmtBlock ([Return (Some (Const (VBool (false))))]),
+                                     None)]));
+                       Return (Some (Const (VBool (true))))]));
+     is_overriden = false }
+  
+  ]]
+  ;
+  constructor_table =
+  [["StringArray (Char)$$" ->
+     { key = "StringArray (Char)$$"; args = [(Array (Char), Name ("value"))];
+       body =
+       StmtBlock ([Expression (Assign
+                               (FieldAccess (This, Identifier ("value")),
+                                ArrayCreateSized
+                                (Char,
+                                 FieldAccess
+                                 (Identifier ("value"), Identifier ("length")))));
+                   For
+                   (Some (VarDec
+                          (None, Int, [(Name ("i"), Some (Const (VInt (0))))])),
+                    Some (Less
+                          (Identifier ("i"),
+                           FieldAccess
+                           (Identifier ("value"), Identifier ("length")))),
+                    [PostInc (Identifier ("i"))],
+                    StmtBlock ([Expression (Assign
+                                            (ArrayAccess
+                                             (FieldAccess
+                                              (This, Identifier ("value")),
+                                              Identifier ("i")),
+                                             ArrayAccess
+                                             (Identifier ("value"),
+                                              Identifier ("i"))))]))])
+       }
+  
+  "String$$" ->
+   { key = "String$$"; args = [];
+     body =
+     StmtBlock ([Expression (Assign
+                             (FieldAccess (This, Identifier ("value")),
+                              ArrayCreateSized (Char, Const (VInt (0)))))])
+     }
+  
+  "StringClassName (\"String\")$$" ->
+   { key = "StringClassName (\"String\")$$";
+     args = [(ClassName ("String"), Name ("original"))];
+     body =
+     StmtBlock ([Expression (Assign
+                             (FieldAccess (This, Identifier ("value")),
+                              FieldAccess
+                              (Identifier ("original"), Identifier ("value"))))])
+     }
+  
+  ]]
+  ; children_keys = []; is_abstract = false; is_inheritable = false;
+  parent_key = Some ("Object");
+  dec_tree =
+  Class
+  ([Final], Name ("String"), None,
+   [([Public; Final], VarField (Array (Char), [(Name ("value"), None)]));
+    ([Public],
+     Constructor
+     (Name ("String"), [],
+      StmtBlock ([Expression (Assign
+                              (FieldAccess (This, Identifier ("value")),
+                               ArrayCreateSized (Char, Const (VInt (0)))))])));
+    ([Public],
+     Constructor
+     (Name ("String"), [(ClassName ("String"), Name ("original"))],
+      StmtBlock ([Expression (Assign
+                              (FieldAccess (This, Identifier ("value")),
+                               FieldAccess
+                               (Identifier ("original"), Identifier ("value"))))])));
+    ([Public],
+     Constructor
+     (Name ("String"), [(Array (Char), Name ("value"))],
+      StmtBlock ([Expression (Assign
+                              (FieldAccess (This, Identifier ("value")),
+                               ArrayCreateSized
+                               (Char,
+                                FieldAccess
+                                (Identifier ("value"), Identifier ("length")))));
+                  For
+                  (Some (VarDec
+                         (None, Int, [(Name ("i"), Some (Const (VInt (0))))])),
+                   Some (Less
+                         (Identifier ("i"),
+                          FieldAccess
+                          (Identifier ("value"), Identifier ("length")))),
+                   [PostInc (Identifier ("i"))],
+                   StmtBlock ([Expression (Assign
+                                           (ArrayAccess
+                                            (FieldAccess
+                                             (This, Identifier ("value")),
+                                             Identifier ("i")),
+                                            ArrayAccess
+                                            (Identifier ("value"),
+                                             Identifier ("i"))))]))])));
+    ([Public],
+     Method
+     (Int, Name ("length"), [],
+      Some (StmtBlock ([Return (Some (FieldAccess
+                                      (Identifier ("value"),
+                                       Identifier ("length"))))]))));
+    ([Public],
+     Method
+     (ClassName ("String"), Name ("concat"),
+      [(ClassName ("String"), Name ("str"))],
+      Some (StmtBlock ([VarDec
+                        (None, Int,
+                         [(Name ("otherLen"),
+                           Some (FieldAccess
+                                 (Identifier ("str"),
+                                  CallMethod (Identifier ("length"), []))))]);
+                        If
+                        (Equal
+                         (FieldAccess
+                          (Identifier ("str"),
+                           CallMethod (Identifier ("length"), [])),
+                          Const (VInt (0))),
+                         StmtBlock ([Return (Some (This))]), None);
+                        VarDec
+                        (None, Int,
+                         [(Name ("len"),
+                           Some (FieldAccess
+                                 (Identifier ("value"), Identifier ("length"))))]);
+                        VarDec
+                        (None, Array (Char),
+                         [(Name ("newValue"),
+                           Some (ArrayCreateSized
+                                 (Char,
+                                  Add
+                                  (Identifier ("len"), Identifier ("otherLen")))))]);
+                        For
+                        (Some (VarDec
+                               (None, Int,
+                                [(Name ("i"), Some (Const (VInt (0))))])),
+                         Some (Less (Identifier ("i"), Identifier ("len"))),
+                         [PostInc (Identifier ("i"))],
+                         StmtBlock ([Expression (Assign
+                                                 (ArrayAccess
+                                                  (Identifier ("newValue"),
+                                                   Identifier ("i")),
+                                                  ArrayAccess
+                                                  (Identifier ("value"),
+                                                   Identifier ("i"))))]));
+                        For
+                        (Some (VarDec
+                               (None, Int,
+                                [(Name ("j"), Some (Identifier ("len")))])),
+                         Some (Less
+                               (Identifier ("j"),
+                                Add
+                                (Identifier ("len"), Identifier ("otherLen")))),
+                         [PostInc (Identifier ("j"))],
+                         StmtBlock ([Expression (Assign
+                                                 (ArrayAccess
+                                                  (Identifier ("newValue"),
+                                                   Identifier ("j")),
+                                                  ArrayAccess
+                                                  (FieldAccess
+                                                   (Identifier ("str"),
+                                                    Identifier ("value")),
+                                                   Sub
+                                                   (Identifier ("j"),
+                                                    Identifier ("len")))))]));
+                        Return (Some (ClassCreate
+                                      (Name ("String"),
+                                       [Identifier ("newValue")])))]))));
+    ([Public],
+     Method
+     (Bool, Name ("startsWith"),
+      [(ClassName ("String"), Name ("prefix")); (Int, Name ("toffset"))],
+      Some (StmtBlock ([VarDec
+                        (None, Array (Char),
+                         [(Name ("ta"), Some (Identifier ("value")))]);
+                        VarDec
+                        (None, Array (Char),
+                         [(Name ("pa"),
+                           Some (FieldAccess
+                                 (Identifier ("prefix"), Identifier ("value"))))]);
+                        VarDec
+                        (None, Int,
+                         [(Name ("pc"),
+                           Some (FieldAccess
+                                 (Identifier ("prefix"),
+                                  CallMethod (Identifier ("length"), []))))]);
+                        If
+                        (Or
+                         (Less (Identifier ("toffset"), Const (VInt (0))),
+                          More
+                          (Identifier ("toffset"),
+                           Sub
+                           (FieldAccess
+                            (Identifier ("value"), Identifier ("length")),
+                            Identifier ("pc")))),
+                         StmtBlock ([Return (Some (Const (VBool (false))))]),
+                         None);
+                        For
+                        (Some (VarDec
+                               (None, Int,
+                                [(Name ("i"), Some (Identifier ("toffset")))])),
+                         Some (Less
+                               (Identifier ("i"),
+                                Add (Identifier ("toffset"), Identifier ("pc")))),
+                         [PostInc (Identifier ("i"))],
+                         StmtBlock ([If
+                                     (NotEqual
+                                      (ArrayAccess
+                                       (Identifier ("ta"), Identifier ("i")),
+                                       ArrayAccess
+                                       (Identifier ("pa"),
+                                        Sub
+                                        (Identifier ("i"),
+                                         Identifier ("toffset")))),
+                                      StmtBlock ([Return (Some (Const (
+                                                                 VBool (false))))]),
+                                      None)]));
+                        Return (Some (Const (VBool (true))))]))));
+    ([Public],
+     Method
+     (Bool, Name ("startsWith"), [(ClassName ("String"), Name ("prefix"))],
+      Some (StmtBlock ([Return (Some (CallMethod
+                                      (Identifier ("startsWith"),
+                                       [Identifier ("prefix");
+                                        Const (VInt (0))])))]))))])
   }
   
   "Person" ->
@@ -740,19 +1120,16 @@
      is_overriden = false }
   
   "equalsClassName (\"Object\")@@" ->
-   { m_type = Int; is_abstract = false; is_overridable = true;
+   { m_type = Bool; is_abstract = false; is_overridable = true;
      has_override_annotation = false;
      args = [(ClassName ("Object"), Name ("obj"))];
      key = "equalsClassName (\"Object\")@@";
      body =
-     Some (StmtBlock ([If
-                       (Equal (This, Identifier ("obj")),
-                        Return (Some (Const (VInt (1)))),
-                        Some (Return (Some (Const (VInt (0))))))]));
+     Some (StmtBlock ([Return (Some (Equal (This, Identifier ("obj"))))]));
      is_overriden = false }
   
   "toString@@" ->
-   { m_type = String; is_abstract = false; is_overridable = true;
+   { m_type = ClassName ("String"); is_abstract = false; is_overridable = true;
      has_override_annotation = false; args = []; key = "toString@@";
      body = Some (StmtBlock ([Return (Some (Const (VString ("Object"))))]));
      is_overriden = false }
@@ -868,15 +1245,12 @@
      is_overriden = false }
   
   "equalsClassName (\"Object\")@@" ->
-   { m_type = Int; is_abstract = false; is_overridable = true;
+   { m_type = Bool; is_abstract = false; is_overridable = true;
      has_override_annotation = false;
      args = [(ClassName ("Object"), Name ("obj"))];
      key = "equalsClassName (\"Object\")@@";
      body =
-     Some (StmtBlock ([If
-                       (Equal (This, Identifier ("obj")),
-                        Return (Some (Const (VInt (1)))),
-                        Some (Return (Some (Const (VInt (0))))))]));
+     Some (StmtBlock ([Return (Some (Equal (This, Identifier ("obj"))))]));
      is_overriden = false }
   
   "setCashInt@@" ->
@@ -890,7 +1264,7 @@
      is_overriden = false }
   
   "toString@@" ->
-   { m_type = String; is_abstract = false; is_overridable = true;
+   { m_type = ClassName ("String"); is_abstract = false; is_overridable = true;
      has_override_annotation = false; args = []; key = "toString@@";
      body = Some (StmtBlock ([Return (Some (Const (VString ("Object"))))]));
      is_overriden = false }
@@ -952,19 +1326,16 @@
                         ;
      method_table =
      [["equalsClassName (\"Object\")@@" ->
-        { m_type = Int; is_abstract = false; is_overridable = true;
+        { m_type = Bool; is_abstract = false; is_overridable = true;
           has_override_annotation = false;
           args = [(ClassName ("Object"), Name ("obj"))];
           key = "equalsClassName (\"Object\")@@";
           body =
-          Some (StmtBlock ([If
-                            (Equal (This, Identifier ("obj")),
-                             Return (Some (Const (VInt (1)))),
-                             Some (Return (Some (Const (VInt (0))))))]));
+          Some (StmtBlock ([Return (Some (Equal (This, Identifier ("obj"))))]));
           is_overriden = false }
      
   "toString@@" ->
-   { m_type = String; is_abstract = false; is_overridable = true;
+   { m_type = ClassName ("String"); is_abstract = false; is_overridable = true;
      has_override_annotation = false; args = []; key = "toString@@";
      body = Some (StmtBlock ([Return (Some (Const (VString ("Object"))))]));
      is_overriden = false }
@@ -1008,22 +1379,20 @@
                           ;
      method_table =
      [["toString@@" ->
-        { m_type = String; is_abstract = false; is_overridable = true;
-          has_override_annotation = false; args = []; key = "toString@@";
+        { m_type = ClassName ("String"); is_abstract = false;
+          is_overridable = true; has_override_annotation = false; args = [];
+          key = "toString@@";
           body =
           Some (StmtBlock ([Return (Some (Const (VString ("Object"))))]));
           is_overriden = false }
      
   "equalsClassName (\"Object\")@@" ->
-   { m_type = Int; is_abstract = false; is_overridable = true;
+   { m_type = Bool; is_abstract = false; is_overridable = true;
      has_override_annotation = false;
      args = [(ClassName ("Object"), Name ("obj"))];
      key = "equalsClassName (\"Object\")@@";
      body =
-     Some (StmtBlock ([If
-                       (Equal (This, Identifier ("obj")),
-                        Return (Some (Const (VInt (1)))),
-                        Some (Return (Some (Const (VInt (0))))))]));
+     Some (StmtBlock ([Return (Some (Equal (This, Identifier ("obj"))))]));
      is_overriden = false }
   
   ]]
@@ -1032,22 +1401,410 @@
   [["Object$$" -> { key = "Object$$"; args = []; body = StmtBlock ([]) }
   
   ]]
-  ; children_keys = ["Main"; "Person"]; is_abstract = false;
+  ; children_keys = ["Main"; "String"; "Person"]; is_abstract = false;
   is_inheritable = true; parent_key = None;
   dec_tree =
   Class
   ([Public], Name ("Object"), None,
    [([Public],
      Method
-     (Int, Name ("equals"), [(ClassName ("Object"), Name ("obj"))],
-      Some (StmtBlock ([If
-                        (Equal (This, Identifier ("obj")),
-                         Return (Some (Const (VInt (1)))),
-                         Some (Return (Some (Const (VInt (0))))))]))));
+     (Bool, Name ("equals"), [(ClassName ("Object"), Name ("obj"))],
+      Some (StmtBlock ([Return (Some (Equal (This, Identifier ("obj"))))]))));
     ([Public],
      Method
-     (String, Name ("toString"), [],
+     (ClassName ("String"), Name ("toString"), [],
       Some (StmtBlock ([Return (Some (Const (VString ("Object"))))]))))])
+  }
+  
+  "String" ->
+   { this_key = "String";
+     field_table =
+     [["value" ->
+        { f_type = Array (Char); key = "value"; is_not_mutable = true;
+          sub_tree = None }
+     
+  ]]
+  ;
+  method_table =
+  [["startsWithClassName (\"String\")@@" ->
+     { m_type = Bool; is_abstract = false; is_overridable = true;
+       has_override_annotation = false;
+       args = [(ClassName ("String"), Name ("prefix"))];
+       key = "startsWithClassName (\"String\")@@";
+       body =
+       Some (StmtBlock ([Return (Some (CallMethod
+                                       (Identifier ("startsWith"),
+                                        [Identifier ("prefix");
+                                         Const (VInt (0))])))]));
+       is_overriden = false }
+  
+  "concatClassName (\"String\")@@" ->
+   { m_type = ClassName ("String"); is_abstract = false; is_overridable = true;
+     has_override_annotation = false;
+     args = [(ClassName ("String"), Name ("str"))];
+     key = "concatClassName (\"String\")@@";
+     body =
+     Some (StmtBlock ([VarDec
+                       (None, Int,
+                        [(Name ("otherLen"),
+                          Some (FieldAccess
+                                (Identifier ("str"),
+                                 CallMethod (Identifier ("length"), []))))]);
+                       If
+                       (Equal
+                        (FieldAccess
+                         (Identifier ("str"),
+                          CallMethod (Identifier ("length"), [])),
+                         Const (VInt (0))),
+                        StmtBlock ([Return (Some (This))]), None);
+                       VarDec
+                       (None, Int,
+                        [(Name ("len"),
+                          Some (FieldAccess
+                                (Identifier ("value"), Identifier ("length"))))]);
+                       VarDec
+                       (None, Array (Char),
+                        [(Name ("newValue"),
+                          Some (ArrayCreateSized
+                                (Char,
+                                 Add
+                                 (Identifier ("len"), Identifier ("otherLen")))))]);
+                       For
+                       (Some (VarDec
+                              (None, Int,
+                               [(Name ("i"), Some (Const (VInt (0))))])),
+                        Some (Less (Identifier ("i"), Identifier ("len"))),
+                        [PostInc (Identifier ("i"))],
+                        StmtBlock ([Expression (Assign
+                                                (ArrayAccess
+                                                 (Identifier ("newValue"),
+                                                  Identifier ("i")),
+                                                 ArrayAccess
+                                                 (Identifier ("value"),
+                                                  Identifier ("i"))))]));
+                       For
+                       (Some (VarDec
+                              (None, Int,
+                               [(Name ("j"), Some (Identifier ("len")))])),
+                        Some (Less
+                              (Identifier ("j"),
+                               Add
+                               (Identifier ("len"), Identifier ("otherLen")))),
+                        [PostInc (Identifier ("j"))],
+                        StmtBlock ([Expression (Assign
+                                                (ArrayAccess
+                                                 (Identifier ("newValue"),
+                                                  Identifier ("j")),
+                                                 ArrayAccess
+                                                 (FieldAccess
+                                                  (Identifier ("str"),
+                                                   Identifier ("value")),
+                                                  Sub
+                                                  (Identifier ("j"),
+                                                   Identifier ("len")))))]));
+                       Return (Some (ClassCreate
+                                     (Name ("String"),
+                                      [Identifier ("newValue")])))]));
+     is_overriden = false }
+  
+  "equalsClassName (\"Object\")@@" ->
+   { m_type = Bool; is_abstract = false; is_overridable = true;
+     has_override_annotation = false;
+     args = [(ClassName ("Object"), Name ("obj"))];
+     key = "equalsClassName (\"Object\")@@";
+     body =
+     Some (StmtBlock ([Return (Some (Equal (This, Identifier ("obj"))))]));
+     is_overriden = false }
+  
+  "toString@@" ->
+   { m_type = ClassName ("String"); is_abstract = false; is_overridable = true;
+     has_override_annotation = false; args = []; key = "toString@@";
+     body = Some (StmtBlock ([Return (Some (Const (VString ("Object"))))]));
+     is_overriden = false }
+  
+  "length@@" ->
+   { m_type = Int; is_abstract = false; is_overridable = true;
+     has_override_annotation = false; args = []; key = "length@@";
+     body =
+     Some (StmtBlock ([Return (Some (FieldAccess
+                                     (Identifier ("value"),
+                                      Identifier ("length"))))]));
+     is_overriden = false }
+  
+  "startsWithClassName (\"String\")Int@@" ->
+   { m_type = Bool; is_abstract = false; is_overridable = true;
+     has_override_annotation = false;
+     args = [(ClassName ("String"), Name ("prefix")); (Int, Name ("toffset"))];
+     key = "startsWithClassName (\"String\")Int@@";
+     body =
+     Some (StmtBlock ([VarDec
+                       (None, Array (Char),
+                        [(Name ("ta"), Some (Identifier ("value")))]);
+                       VarDec
+                       (None, Array (Char),
+                        [(Name ("pa"),
+                          Some (FieldAccess
+                                (Identifier ("prefix"), Identifier ("value"))))]);
+                       VarDec
+                       (None, Int,
+                        [(Name ("pc"),
+                          Some (FieldAccess
+                                (Identifier ("prefix"),
+                                 CallMethod (Identifier ("length"), []))))]);
+                       If
+                       (Or
+                        (Less (Identifier ("toffset"), Const (VInt (0))),
+                         More
+                         (Identifier ("toffset"),
+                          Sub
+                          (FieldAccess
+                           (Identifier ("value"), Identifier ("length")),
+                           Identifier ("pc")))),
+                        StmtBlock ([Return (Some (Const (VBool (false))))]),
+                        None);
+                       For
+                       (Some (VarDec
+                              (None, Int,
+                               [(Name ("i"), Some (Identifier ("toffset")))])),
+                        Some (Less
+                              (Identifier ("i"),
+                               Add (Identifier ("toffset"), Identifier ("pc")))),
+                        [PostInc (Identifier ("i"))],
+                        StmtBlock ([If
+                                    (NotEqual
+                                     (ArrayAccess
+                                      (Identifier ("ta"), Identifier ("i")),
+                                      ArrayAccess
+                                      (Identifier ("pa"),
+                                       Sub
+                                       (Identifier ("i"),
+                                        Identifier ("toffset")))),
+                                     StmtBlock ([Return (Some (Const (VBool (false))))]),
+                                     None)]));
+                       Return (Some (Const (VBool (true))))]));
+     is_overriden = false }
+  
+  ]]
+  ;
+  constructor_table =
+  [["StringArray (Char)$$" ->
+     { key = "StringArray (Char)$$"; args = [(Array (Char), Name ("value"))];
+       body =
+       StmtBlock ([Expression (Assign
+                               (FieldAccess (This, Identifier ("value")),
+                                ArrayCreateSized
+                                (Char,
+                                 FieldAccess
+                                 (Identifier ("value"), Identifier ("length")))));
+                   For
+                   (Some (VarDec
+                          (None, Int, [(Name ("i"), Some (Const (VInt (0))))])),
+                    Some (Less
+                          (Identifier ("i"),
+                           FieldAccess
+                           (Identifier ("value"), Identifier ("length")))),
+                    [PostInc (Identifier ("i"))],
+                    StmtBlock ([Expression (Assign
+                                            (ArrayAccess
+                                             (FieldAccess
+                                              (This, Identifier ("value")),
+                                              Identifier ("i")),
+                                             ArrayAccess
+                                             (Identifier ("value"),
+                                              Identifier ("i"))))]))])
+       }
+  
+  "String$$" ->
+   { key = "String$$"; args = [];
+     body =
+     StmtBlock ([Expression (Assign
+                             (FieldAccess (This, Identifier ("value")),
+                              ArrayCreateSized (Char, Const (VInt (0)))))])
+     }
+  
+  "StringClassName (\"String\")$$" ->
+   { key = "StringClassName (\"String\")$$";
+     args = [(ClassName ("String"), Name ("original"))];
+     body =
+     StmtBlock ([Expression (Assign
+                             (FieldAccess (This, Identifier ("value")),
+                              FieldAccess
+                              (Identifier ("original"), Identifier ("value"))))])
+     }
+  
+  ]]
+  ; children_keys = []; is_abstract = false; is_inheritable = false;
+  parent_key = Some ("Object");
+  dec_tree =
+  Class
+  ([Final], Name ("String"), None,
+   [([Public; Final], VarField (Array (Char), [(Name ("value"), None)]));
+    ([Public],
+     Constructor
+     (Name ("String"), [],
+      StmtBlock ([Expression (Assign
+                              (FieldAccess (This, Identifier ("value")),
+                               ArrayCreateSized (Char, Const (VInt (0)))))])));
+    ([Public],
+     Constructor
+     (Name ("String"), [(ClassName ("String"), Name ("original"))],
+      StmtBlock ([Expression (Assign
+                              (FieldAccess (This, Identifier ("value")),
+                               FieldAccess
+                               (Identifier ("original"), Identifier ("value"))))])));
+    ([Public],
+     Constructor
+     (Name ("String"), [(Array (Char), Name ("value"))],
+      StmtBlock ([Expression (Assign
+                              (FieldAccess (This, Identifier ("value")),
+                               ArrayCreateSized
+                               (Char,
+                                FieldAccess
+                                (Identifier ("value"), Identifier ("length")))));
+                  For
+                  (Some (VarDec
+                         (None, Int, [(Name ("i"), Some (Const (VInt (0))))])),
+                   Some (Less
+                         (Identifier ("i"),
+                          FieldAccess
+                          (Identifier ("value"), Identifier ("length")))),
+                   [PostInc (Identifier ("i"))],
+                   StmtBlock ([Expression (Assign
+                                           (ArrayAccess
+                                            (FieldAccess
+                                             (This, Identifier ("value")),
+                                             Identifier ("i")),
+                                            ArrayAccess
+                                            (Identifier ("value"),
+                                             Identifier ("i"))))]))])));
+    ([Public],
+     Method
+     (Int, Name ("length"), [],
+      Some (StmtBlock ([Return (Some (FieldAccess
+                                      (Identifier ("value"),
+                                       Identifier ("length"))))]))));
+    ([Public],
+     Method
+     (ClassName ("String"), Name ("concat"),
+      [(ClassName ("String"), Name ("str"))],
+      Some (StmtBlock ([VarDec
+                        (None, Int,
+                         [(Name ("otherLen"),
+                           Some (FieldAccess
+                                 (Identifier ("str"),
+                                  CallMethod (Identifier ("length"), []))))]);
+                        If
+                        (Equal
+                         (FieldAccess
+                          (Identifier ("str"),
+                           CallMethod (Identifier ("length"), [])),
+                          Const (VInt (0))),
+                         StmtBlock ([Return (Some (This))]), None);
+                        VarDec
+                        (None, Int,
+                         [(Name ("len"),
+                           Some (FieldAccess
+                                 (Identifier ("value"), Identifier ("length"))))]);
+                        VarDec
+                        (None, Array (Char),
+                         [(Name ("newValue"),
+                           Some (ArrayCreateSized
+                                 (Char,
+                                  Add
+                                  (Identifier ("len"), Identifier ("otherLen")))))]);
+                        For
+                        (Some (VarDec
+                               (None, Int,
+                                [(Name ("i"), Some (Const (VInt (0))))])),
+                         Some (Less (Identifier ("i"), Identifier ("len"))),
+                         [PostInc (Identifier ("i"))],
+                         StmtBlock ([Expression (Assign
+                                                 (ArrayAccess
+                                                  (Identifier ("newValue"),
+                                                   Identifier ("i")),
+                                                  ArrayAccess
+                                                  (Identifier ("value"),
+                                                   Identifier ("i"))))]));
+                        For
+                        (Some (VarDec
+                               (None, Int,
+                                [(Name ("j"), Some (Identifier ("len")))])),
+                         Some (Less
+                               (Identifier ("j"),
+                                Add
+                                (Identifier ("len"), Identifier ("otherLen")))),
+                         [PostInc (Identifier ("j"))],
+                         StmtBlock ([Expression (Assign
+                                                 (ArrayAccess
+                                                  (Identifier ("newValue"),
+                                                   Identifier ("j")),
+                                                  ArrayAccess
+                                                  (FieldAccess
+                                                   (Identifier ("str"),
+                                                    Identifier ("value")),
+                                                   Sub
+                                                   (Identifier ("j"),
+                                                    Identifier ("len")))))]));
+                        Return (Some (ClassCreate
+                                      (Name ("String"),
+                                       [Identifier ("newValue")])))]))));
+    ([Public],
+     Method
+     (Bool, Name ("startsWith"),
+      [(ClassName ("String"), Name ("prefix")); (Int, Name ("toffset"))],
+      Some (StmtBlock ([VarDec
+                        (None, Array (Char),
+                         [(Name ("ta"), Some (Identifier ("value")))]);
+                        VarDec
+                        (None, Array (Char),
+                         [(Name ("pa"),
+                           Some (FieldAccess
+                                 (Identifier ("prefix"), Identifier ("value"))))]);
+                        VarDec
+                        (None, Int,
+                         [(Name ("pc"),
+                           Some (FieldAccess
+                                 (Identifier ("prefix"),
+                                  CallMethod (Identifier ("length"), []))))]);
+                        If
+                        (Or
+                         (Less (Identifier ("toffset"), Const (VInt (0))),
+                          More
+                          (Identifier ("toffset"),
+                           Sub
+                           (FieldAccess
+                            (Identifier ("value"), Identifier ("length")),
+                            Identifier ("pc")))),
+                         StmtBlock ([Return (Some (Const (VBool (false))))]),
+                         None);
+                        For
+                        (Some (VarDec
+                               (None, Int,
+                                [(Name ("i"), Some (Identifier ("toffset")))])),
+                         Some (Less
+                               (Identifier ("i"),
+                                Add (Identifier ("toffset"), Identifier ("pc")))),
+                         [PostInc (Identifier ("i"))],
+                         StmtBlock ([If
+                                     (NotEqual
+                                      (ArrayAccess
+                                       (Identifier ("ta"), Identifier ("i")),
+                                       ArrayAccess
+                                       (Identifier ("pa"),
+                                        Sub
+                                        (Identifier ("i"),
+                                         Identifier ("toffset")))),
+                                      StmtBlock ([Return (Some (Const (
+                                                                 VBool (false))))]),
+                                      None)]));
+                        Return (Some (Const (VBool (true))))]))));
+    ([Public],
+     Method
+     (Bool, Name ("startsWith"), [(ClassName ("String"), Name ("prefix"))],
+      Some (StmtBlock ([Return (Some (CallMethod
+                                      (Identifier ("startsWith"),
+                                       [Identifier ("prefix");
+                                        Const (VInt (0))])))]))))])
   }
   
   "Person" ->
@@ -1076,19 +1833,16 @@
      is_overriden = false }
   
   "equalsClassName (\"Object\")@@" ->
-   { m_type = Int; is_abstract = false; is_overridable = true;
+   { m_type = Bool; is_abstract = false; is_overridable = true;
      has_override_annotation = false;
      args = [(ClassName ("Object"), Name ("obj"))];
      key = "equalsClassName (\"Object\")@@";
      body =
-     Some (StmtBlock ([If
-                       (Equal (This, Identifier ("obj")),
-                        Return (Some (Const (VInt (1)))),
-                        Some (Return (Some (Const (VInt (0))))))]));
+     Some (StmtBlock ([Return (Some (Equal (This, Identifier ("obj"))))]));
      is_overriden = false }
   
   "toString@@" ->
-   { m_type = String; is_abstract = false; is_overridable = true;
+   { m_type = ClassName ("String"); is_abstract = false; is_overridable = true;
      has_override_annotation = false; args = []; key = "toString@@";
      body = Some (StmtBlock ([Return (Some (Const (VString ("Object"))))]));
      is_overriden = false }
@@ -1177,16 +1931,44 @@
          assignment_count = 1; v_value = VInt (3); scope_level = 0 }
     
   "s1" ->
-   { v_type = String; v_key = "s1"; is_not_mutable = false;
-     assignment_count = 1; v_value = VString ("a"); scope_level = 0 }
+   { v_type = ClassName ("String"); v_key = "s1"; is_not_mutable = false;
+     assignment_count = 1;
+     v_value =
+     VObjectRef (RObj ({ class_key = "String";
+                         field_ref_table =
+                         [["value" ->
+                            { key = "value"; f_type = Array (Char);
+                              f_value =
+                              VArray (Arr ({ a_type = Char;
+                                             values = [VChar (a)]; length = 1;
+                                             number = 2 }));
+                              is_not_mutable = true; assignment_count = 0 }
+                         
+  ]]
+  ; number = 1 })); scope_level = 0
+  }
   
   "a" ->
    { v_type = Int; v_key = "a"; is_not_mutable = false; assignment_count = 2;
      v_value = VInt (2); scope_level = 0 }
   
   "s3" ->
-   { v_type = String; v_key = "s3"; is_not_mutable = false;
-     assignment_count = 1; v_value = VString ("ab"); scope_level = 0 }
+   { v_type = ClassName ("String"); v_key = "s3"; is_not_mutable = false;
+     assignment_count = 1;
+     v_value =
+     VObjectRef (RObj ({ class_key = "String";
+                         field_ref_table =
+                         [["value" ->
+                            { key = "value"; f_type = Array (Char);
+                              f_value =
+                              VArray (Arr ({ a_type = Char;
+                                             values = [VChar (a); VChar (b)];
+                                             length = 2; number = 7 }));
+                              is_not_mutable = true; assignment_count = 0 }
+                         
+  ]]
+  ; number = 6 })); scope_level = 0
+  }
   
   "val7" ->
    { v_type = Int; v_key = "val7"; is_not_mutable = false;
@@ -1197,8 +1979,22 @@
      assignment_count = 1; v_value = VInt (15); scope_level = 0 }
   
   "s4" ->
-   { v_type = String; v_key = "s4"; is_not_mutable = false;
-     assignment_count = 1; v_value = VString ("a2"); scope_level = 0 }
+   { v_type = ClassName ("String"); v_key = "s4"; is_not_mutable = false;
+     assignment_count = 1;
+     v_value =
+     VObjectRef (RObj ({ class_key = "String";
+                         field_ref_table =
+                         [["value" ->
+                            { key = "value"; f_type = Array (Char);
+                              f_value =
+                              VArray (Arr ({ a_type = Char;
+                                             values = [VChar (a); VChar (2)];
+                                             length = 2; number = 10 }));
+                              is_not_mutable = true; assignment_count = 0 }
+                         
+  ]]
+  ; number = 9 })); scope_level = 0
+  }
   
   "val3" ->
    { v_type = Int; v_key = "val3"; is_not_mutable = false;
@@ -1209,16 +2005,44 @@
      v_value = VInt (2); scope_level = 0 }
   
   "s5" ->
-   { v_type = String; v_key = "s5"; is_not_mutable = false;
-     assignment_count = 1; v_value = VString ("2b"); scope_level = 0 }
+   { v_type = ClassName ("String"); v_key = "s5"; is_not_mutable = false;
+     assignment_count = 1;
+     v_value =
+     VObjectRef (RObj ({ class_key = "String";
+                         field_ref_table =
+                         [["value" ->
+                            { key = "value"; f_type = Array (Char);
+                              f_value =
+                              VArray (Arr ({ a_type = Char;
+                                             values = [VChar (2); VChar (b)];
+                                             length = 2; number = 13 }));
+                              is_not_mutable = true; assignment_count = 0 }
+                         
+  ]]
+  ; number = 12 })); scope_level = 0
+  }
   
   "val4" ->
    { v_type = Int; v_key = "val4"; is_not_mutable = false;
      assignment_count = 1; v_value = VInt (5); scope_level = 0 }
   
   "s2" ->
-   { v_type = String; v_key = "s2"; is_not_mutable = false;
-     assignment_count = 1; v_value = VString ("b"); scope_level = 0 }
+   { v_type = ClassName ("String"); v_key = "s2"; is_not_mutable = false;
+     assignment_count = 1;
+     v_value =
+     VObjectRef (RObj ({ class_key = "String";
+                         field_ref_table =
+                         [["value" ->
+                            { key = "value"; f_type = Array (Char);
+                              f_value =
+                              VArray (Arr ({ a_type = Char;
+                                             values = [VChar (b)]; length = 1;
+                                             number = 4 }));
+                              is_not_mutable = true; assignment_count = 0 }
+                         
+  ]]
+  ; number = 3 })); scope_level = 0
+  }
   
   "val5" ->
    { v_type = Int; v_key = "val5"; is_not_mutable = false;
@@ -1233,10 +2057,23 @@
      v_value = VInt (3); scope_level = 0 }
   
   ]]
-  ; last_expr_result = VString ("2b"); runtime_signal = NoSignal;
-  curr_method_type = Void; is_main_scope = true; nested_loops_cnt = 0;
-  scope_level = 0; cur_constr_key = None; prev_context = None;
-  obj_created_cnt = 0; is_creation = false; constr_affilation = None
+  ;
+  last_expr_result =
+  VObjectRef (RObj ({ class_key = "String";
+                      field_ref_table =
+                      [["value" ->
+                         { key = "value"; f_type = Array (Char);
+                           f_value =
+                           VArray (Arr ({ a_type = Char;
+                                          values = [VChar (2); VChar (b)];
+                                          length = 2; number = 13 }));
+                           is_not_mutable = true; assignment_count = 0 }
+                      
+  ]]
+  ; number = 12 })); runtime_signal = NoSignal; curr_method_type = Void;
+  is_main_scope = true; nested_loops_cnt = 0; scope_level = 0;
+  cur_constr_key = None; prev_context = None; obj_created_cnt = 13;
+  is_creation = false; constr_affilation = None
   }
   
   ------------------- BOOLEAN EXPRESSIONS TEST ------------------
@@ -1245,9 +2082,23 @@
                                 ; number = 0 });
     var_table =
     [["s1" ->
-       { v_type = String; v_key = "s1"; is_not_mutable = false;
-         assignment_count = 1; v_value = VString ("a"); scope_level = 0 }
-    
+       { v_type = ClassName ("String"); v_key = "s1"; is_not_mutable = false;
+         assignment_count = 1;
+         v_value =
+         VObjectRef (RObj ({ class_key = "String";
+                             field_ref_table =
+                             [["value" ->
+                                { key = "value"; f_type = Array (Char);
+                                  f_value =
+                                  VArray (Arr ({ a_type = Char;
+                                                 values = [VChar (a)];
+                                                 length = 1; number = 2 }));
+                                  is_not_mutable = true; assignment_count = 0 }
+                             
+  ]]
+  ; number = 1 })); scope_level = 0
+  }
+  
   "a" ->
    { v_type = Int; v_key = "a"; is_not_mutable = false; assignment_count = 1;
      v_value = VInt (10); scope_level = 0 }
@@ -1271,11 +2122,26 @@
                               is_not_mutable = false; assignment_count = 0 }
                          
   "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Alice");
-     is_not_mutable = false; assignment_count = 0 }
+   { key = "name"; f_type = ClassName ("String");
+     f_value =
+     VObjectRef (RObj ({ class_key = "String";
+                         field_ref_table =
+                         [["value" ->
+                            { key = "value"; f_type = Array (Char);
+                              f_value =
+                              VArray (Arr ({ a_type = Char;
+                                             values =
+                                             [VChar (A); VChar (l); VChar (i);
+                                              VChar (c); VChar (e)];
+                                             length = 5; number = 11 }));
+                              is_not_mutable = true; assignment_count = 0 }
+                         
+  ]]
+  ; number = 10 })); is_not_mutable = false; assignment_count = 0
+  }
   
   ]]
-  ; number = 2 })); scope_level = 0
+  ; number = 10 })); scope_level = 0
   }
   
   "b" ->
@@ -1301,11 +2167,25 @@
                               is_not_mutable = false; assignment_count = 0 }
                          
   "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Bob");
-     is_not_mutable = false; assignment_count = 0 }
+   { key = "name"; f_type = ClassName ("String");
+     f_value =
+     VObjectRef (RObj ({ class_key = "String";
+                         field_ref_table =
+                         [["value" ->
+                            { key = "value"; f_type = Array (Char);
+                              f_value =
+                              VArray (Arr ({ a_type = Char;
+                                             values =
+                                             [VChar (B); VChar (o); VChar (b)];
+                                             length = 3; number = 10 }));
+                              is_not_mutable = true; assignment_count = 0 }
+                         
+  ]]
+  ; number = 9 })); is_not_mutable = false; assignment_count = 0
+  }
   
   ]]
-  ; number = 1 })); scope_level = 0
+  ; number = 9 })); scope_level = 0
   }
   
   "p1" ->
@@ -1319,16 +2199,44 @@
                               is_not_mutable = false; assignment_count = 0 }
                          
   "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Bob");
-     is_not_mutable = false; assignment_count = 0 }
+   { key = "name"; f_type = ClassName ("String");
+     f_value =
+     VObjectRef (RObj ({ class_key = "String";
+                         field_ref_table =
+                         [["value" ->
+                            { key = "value"; f_type = Array (Char);
+                              f_value =
+                              VArray (Arr ({ a_type = Char;
+                                             values =
+                                             [VChar (B); VChar (o); VChar (b)];
+                                             length = 3; number = 10 }));
+                              is_not_mutable = true; assignment_count = 0 }
+                         
+  ]]
+  ; number = 9 })); is_not_mutable = false; assignment_count = 0
+  }
   
   ]]
-  ; number = 1 })); scope_level = 0
+  ; number = 9 })); scope_level = 0
   }
   
   "s2" ->
-   { v_type = String; v_key = "s2"; is_not_mutable = false;
-     assignment_count = 1; v_value = VString ("b"); scope_level = 0 }
+   { v_type = ClassName ("String"); v_key = "s2"; is_not_mutable = false;
+     assignment_count = 1;
+     v_value =
+     VObjectRef (RObj ({ class_key = "String";
+                         field_ref_table =
+                         [["value" ->
+                            { key = "value"; f_type = Array (Char);
+                              f_value =
+                              VArray (Arr ({ a_type = Char;
+                                             values = [VChar (b)]; length = 1;
+                                             number = 4 }));
+                              is_not_mutable = true; assignment_count = 0 }
+                         
+  ]]
+  ; number = 3 })); scope_level = 0
+  }
   
   "lVal" ->
    { v_type = Int; v_key = "lVal"; is_not_mutable = false;
@@ -1378,262 +2286,15 @@
   ; last_expr_result = VInt (1); runtime_signal = NoSignal;
   curr_method_type = Void; is_main_scope = true; nested_loops_cnt = 0;
   scope_level = 0; cur_constr_key = None; prev_context = None;
-  obj_created_cnt = 2; is_creation = false; constr_affilation = None
+  obj_created_cnt = 10; is_creation = false; constr_affilation = None
   }
   
   ------------------- SIMPLE METHOD CALL TEST ------------------
-  { cur_object =
-    RObj ({ class_key = "Main"; field_ref_table = [[]]
-                                ; number = 0 });
-    var_table =
-    [["a2" ->
-       { v_type = Int; v_key = "a2"; is_not_mutable = false;
-         assignment_count = 1; v_value = VInt (30); scope_level = 0 }
-    
-  "a1" ->
-   { v_type = Int; v_key = "a1"; is_not_mutable = false; assignment_count = 1;
-     v_value = VInt (25); scope_level = 0 }
-  
-  "res" ->
-   { v_type = Int; v_key = "res"; is_not_mutable = false; assignment_count = 1;
-     v_value = VInt (125); scope_level = 0 }
-  
-  "person" ->
-   { v_type = ClassName ("Person"); v_key = "person"; is_not_mutable = false;
-     assignment_count = 1;
-     v_value =
-     VObjectRef (RObj ({ class_key = "Person";
-                         field_ref_table =
-                         [["age" ->
-                            { key = "age"; f_type = Int; f_value = VInt (30);
-                              is_not_mutable = false; assignment_count = 1 }
-                         
-  "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Bob");
-     is_not_mutable = false; assignment_count = 0 }
-  
-  ]]
-  ; number = 1 })); scope_level = 0
-  }
-  
-  ]]
-  ; last_expr_result = VInt (30); runtime_signal = NoSignal;
-  curr_method_type = Void; is_main_scope = true; nested_loops_cnt = 0;
-  scope_level = 0; cur_constr_key = None; prev_context = None;
-  obj_created_cnt = 1; is_creation = false; constr_affilation = None
-  }
-  
+  No such field
   ------------------- UPDATE OBJECT STATE IN MAIN TEST ------------------
-  { cur_object =
-    RObj ({ class_key = "Main"; field_ref_table = [[]]
-                                ; number = 0 });
-    var_table =
-    [["p2" ->
-       { v_type = ClassName ("Person"); v_key = "p2"; is_not_mutable = false;
-         assignment_count = 1;
-         v_value =
-         VObjectRef (RObj ({ class_key = "Person";
-                             field_ref_table =
-                             [["age" ->
-                                { key = "age"; f_type = Int;
-                                  f_value = VInt (55); is_not_mutable = false;
-                                  assignment_count = 1 }
-                             
-  "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Bob");
-     is_not_mutable = false; assignment_count = 0 }
-  
-  ]]
-  ; number = 1 })); scope_level = 0
-  }
-  
-  "p3" ->
-   { v_type = ClassName ("Person"); v_key = "p3"; is_not_mutable = false;
-     assignment_count = 1;
-     v_value =
-     VObjectRef (RObj ({ class_key = "Person";
-                         field_ref_table =
-                         [["age" ->
-                            { key = "age"; f_type = Int; f_value = VInt (55);
-                              is_not_mutable = false; assignment_count = 1 }
-                         
-  "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Bob");
-     is_not_mutable = false; assignment_count = 0 }
-  
-  ]]
-  ; number = 1 })); scope_level = 0
-  }
-  
-  "res" ->
-   { v_type = Int; v_key = "res"; is_not_mutable = false; assignment_count = 1;
-     v_value = VInt (55); scope_level = 0 }
-  
-  "p1" ->
-   { v_type = ClassName ("Person"); v_key = "p1"; is_not_mutable = false;
-     assignment_count = 1;
-     v_value =
-     VObjectRef (RObj ({ class_key = "Person";
-                         field_ref_table =
-                         [["age" ->
-                            { key = "age"; f_type = Int; f_value = VInt (55);
-                              is_not_mutable = false; assignment_count = 1 }
-                         
-  "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Bob");
-     is_not_mutable = false; assignment_count = 0 }
-  
-  ]]
-  ; number = 1 })); scope_level = 0
-  }
-  
-  "person" ->
-   { v_type = ClassName ("Person"); v_key = "person"; is_not_mutable = false;
-     assignment_count = 1;
-     v_value =
-     VObjectRef (RObj ({ class_key = "Person";
-                         field_ref_table =
-                         [["age" ->
-                            { key = "age"; f_type = Int; f_value = VInt (55);
-                              is_not_mutable = false; assignment_count = 1 }
-                         
-  "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Bob");
-     is_not_mutable = false; assignment_count = 0 }
-  
-  ]]
-  ; number = 1 })); scope_level = 0
-  }
-  
-  ]]
-  ; last_expr_result = VInt (55); runtime_signal = NoSignal;
-  curr_method_type = Void; is_main_scope = true; nested_loops_cnt = 0;
-  scope_level = 0; cur_constr_key = None; prev_context = None;
-  obj_created_cnt = 1; is_creation = false; constr_affilation = None
-  }
-  
+  No such field
   ------------------- CHILD WORKING TEST ------------------
-  { cur_object =
-    RObj ({ class_key = "Main"; field_ref_table = [[]]
-                                ; number = 0 });
-    var_table =
-    [["childSecond" ->
-       { v_type = ClassName ("Child"); v_key = "childSecond";
-         is_not_mutable = false; assignment_count = 1;
-         v_value =
-         VObjectRef (RObj ({ class_key = "Child";
-                             field_ref_table =
-                             [["parent" ->
-                                { key = "parent";
-                                  f_type = ClassName ("Person");
-                                  f_value =
-                                  VObjectRef (RObj ({ class_key = "Person";
-                                                      field_ref_table =
-                                                      [["age" ->
-                                                         { key = "age";
-                                                           f_type = Int;
-                                                           f_value = VInt (27);
-                                                           is_not_mutable =
-                                                           false;
-                                                           assignment_count = 1
-                                                           }
-                                                      
-  "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Bob");
-     is_not_mutable = false; assignment_count = 0 }
-  
-  ]]
-  ; number = 1 })); is_not_mutable = false; assignment_count = 0
-  }
-  
-  "age" ->
-   { key = "age"; f_type = Int; f_value = VInt (20); is_not_mutable = false;
-     assignment_count = 1 }
-  
-  "name" ->
-   { key = "name"; f_type = String; f_value = VString ("");
-     is_not_mutable = false; assignment_count = 0 }
-  
-  ]]
-  ; number = 4 })); scope_level = 0
-  }
-  
-  "person" ->
-   { v_type = ClassName ("Person"); v_key = "person"; is_not_mutable = false;
-     assignment_count = 1;
-     v_value =
-     VObjectRef (RObj ({ class_key = "Person";
-                         field_ref_table =
-                         [["age" ->
-                            { key = "age"; f_type = Int; f_value = VInt (27);
-                              is_not_mutable = false; assignment_count = 1 }
-                         
-  "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Bob");
-     is_not_mutable = false; assignment_count = 0 }
-  
-  ]]
-  ; number = 1 })); scope_level = 0
-  }
-  
-  "childFirst" ->
-   { v_type = ClassName ("Child"); v_key = "childFirst";
-     is_not_mutable = false; assignment_count = 1;
-     v_value =
-     VObjectRef (RObj ({ class_key = "Child";
-                         field_ref_table =
-                         [["parent" ->
-                            { key = "parent"; f_type = ClassName ("Person");
-                              f_value =
-                              VObjectRef (RObj ({ class_key = "Person";
-                                                  field_ref_table =
-                                                  [["age" ->
-                                                     { key = "age";
-                                                       f_type = Int;
-                                                       f_value = VInt (40);
-                                                       is_not_mutable = false;
-                                                       assignment_count = 0 }
-                                                  
-  "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Flexer");
-     is_not_mutable = false; assignment_count = 0 }
-  
-  ]]
-  ; number = 3 })); is_not_mutable = false; assignment_count = 0
-  }
-  
-  "age" ->
-   { key = "age"; f_type = Int; f_value = VInt (4); is_not_mutable = false;
-     assignment_count = 1 }
-  
-  "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Alice");
-     is_not_mutable = false; assignment_count = 0 }
-  
-  ]]
-  ; number = 2 })); scope_level = 0
-  }
-  
-  ]]
-  ;
-  last_expr_result =
-  VObjectRef (RObj ({ class_key = "Person";
-                      field_ref_table =
-                      [["age" ->
-                         { key = "age"; f_type = Int; f_value = VInt (27);
-                           is_not_mutable = false; assignment_count = 1 }
-                      
-  "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Bob");
-     is_not_mutable = false; assignment_count = 0 }
-  
-  ]]
-  ; number = 1 })); runtime_signal = NoSignal; curr_method_type = Void;
-  is_main_scope = true; nested_loops_cnt = 0; scope_level = 0;
-  cur_constr_key = None; prev_context = None; obj_created_cnt = 4;
-  is_creation = false; constr_affilation = None
-  }
-  
+  No such field
   ------------------- SCOPE TEST ------------------
   { cur_object =
     RObj ({ class_key = "Main"; field_ref_table = [[]]
@@ -1680,7 +2341,7 @@
                     [VInt (0); VInt (1); VInt (2); VInt (3); VInt (4);
                      VInt (5); VInt (6); VInt (7); VInt (8); VInt (9);
                      VInt (10)];
-                    number = 1 }));
+                    length = 11; number = 1 }));
      scope_level = 0 }
   
   "i" ->
@@ -1709,7 +2370,7 @@
                          VInt (5); VInt (6); VInt (7); VInt (8); VInt (9);
                          VInt (10); VInt (11); VInt (12); VInt (13); VInt (14);
                          VInt (0); VInt (0); VInt (0); VInt (0); VInt (0)];
-                        number = 2 }));
+                        length = 20; number = 2 }));
          scope_level = 1 }
     
   "arr" ->
@@ -1720,7 +2381,7 @@
                     values =
                     [VInt (0); VInt (1); VInt (0); VInt (1); VInt (0);
                      VInt (1); VInt (0); VInt (1); VInt (0); VInt (1)];
-                    number = 1 }));
+                    length = 10; number = 1 }));
      scope_level = 0 }
   
   ]]
@@ -1754,100 +2415,18 @@
                      VInt (5); VInt (6); VInt (7); VInt (8); VInt (9);
                      VInt (10); VInt (11); VInt (12); VInt (13); VInt (14);
                      VInt (15)];
-                    number = 1 }));
+                    length = 16; number = 1 }));
      scope_level = 0 }
   
   ]]
-  ; last_expr_result = VBool (false); runtime_signal = NoSignal;
+  ; last_expr_result = VVoid; runtime_signal = NoSignal;
   curr_method_type = Void; is_main_scope = true; nested_loops_cnt = 0;
   scope_level = 0; cur_constr_key = None; prev_context = None;
   obj_created_cnt = 2; is_creation = false; constr_affilation = None
   }
   
   ------------------- CHANGE OF OBJECT STATE IN OTHER CONTEXT ------------------
-  { cur_object =
-    RObj ({ class_key = "Main"; field_ref_table = [[]]
-                                ; number = 0 });
-    var_table =
-    [["child" ->
-       { v_type = ClassName ("Child"); v_key = "child"; is_not_mutable = false;
-         assignment_count = 1;
-         v_value =
-         VObjectRef (RObj ({ class_key = "Child";
-                             field_ref_table =
-                             [["parent" ->
-                                { key = "parent";
-                                  f_type = ClassName ("Person");
-                                  f_value =
-                                  VObjectRef (RObj ({ class_key = "Person";
-                                                      field_ref_table =
-                                                      [["age" ->
-                                                         { key = "age";
-                                                           f_type = Int;
-                                                           f_value = VInt (30);
-                                                           is_not_mutable =
-                                                           false;
-                                                           assignment_count = 1
-                                                           }
-                                                      
-  "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Bob");
-     is_not_mutable = false; assignment_count = 0 }
-  
-  ]]
-  ; number = 1 })); is_not_mutable = false; assignment_count = 0
-  }
-  
-  "age" ->
-   { key = "age"; f_type = Int; f_value = VInt (0); is_not_mutable = false;
-     assignment_count = 0 }
-  
-  "name" ->
-   { key = "name"; f_type = String; f_value = VString ("");
-     is_not_mutable = false; assignment_count = 0 }
-  
-  ]]
-  ; number = 2 })); scope_level = 0
-  }
-  
-  "person" ->
-   { v_type = ClassName ("Person"); v_key = "person"; is_not_mutable = false;
-     assignment_count = 1;
-     v_value =
-     VObjectRef (RObj ({ class_key = "Person";
-                         field_ref_table =
-                         [["age" ->
-                            { key = "age"; f_type = Int; f_value = VInt (30);
-                              is_not_mutable = false; assignment_count = 1 }
-                         
-  "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Bob");
-     is_not_mutable = false; assignment_count = 0 }
-  
-  ]]
-  ; number = 1 })); scope_level = 0
-  }
-  
-  ]]
-  ;
-  last_expr_result =
-  VObjectRef (RObj ({ class_key = "Person";
-                      field_ref_table =
-                      [["age" ->
-                         { key = "age"; f_type = Int; f_value = VInt (30);
-                           is_not_mutable = false; assignment_count = 1 }
-                      
-  "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Bob");
-     is_not_mutable = false; assignment_count = 0 }
-  
-  ]]
-  ; number = 1 })); runtime_signal = NoSignal; curr_method_type = Void;
-  is_main_scope = true; nested_loops_cnt = 0; scope_level = 0;
-  cur_constr_key = None; prev_context = None; obj_created_cnt = 2;
-  is_creation = false; constr_affilation = None
-  }
-  
+  No such field
   ------------------- PATTERN VISITOR TEST ------------------
   { cur_object =
     RObj ({ class_key = "Main"; field_ref_table = [[]]
@@ -1858,7 +2437,7 @@
          assignment_count = 1;
          v_value =
          VArray (Arr ({ a_type = Int; values = [VInt (75); VInt (8); VInt (0)];
-                        number = 7 }));
+                        length = 3; number = 7 }));
          scope_level = 0 }
     
   "areaVisitor" ->
@@ -1913,7 +2492,7 @@
      assignment_count = 0 }
   
   ]]
-  ; number = 3 }))]; number = 4 })); scope_level = 0
+  ; number = 3 }))]; length = 3; number = 4 })); scope_level = 0
   }
   
   "resArea" ->
@@ -1921,7 +2500,7 @@
      assignment_count = 1;
      v_value =
      VArray (Arr ({ a_type = Int; values = [VInt (30); VInt (12); VInt (3)];
-                    number = 8 }));
+                    length = 3; number = 8 }));
      scope_level = 0 }
   
   "perimeterVisitor" ->
@@ -1993,7 +2572,7 @@
                      VInt (5); VInt (6); VInt (7); VInt (8); VInt (9);
                      VInt (10); VInt (11); VInt (12); VInt (13); VInt (14);
                      VInt (15)];
-                    number = 1 }));
+                    length = 16; number = 1 }));
      scope_level = 0 }
   
   "high" ->
@@ -2005,7 +2584,7 @@
      v_value = VInt (0); scope_level = 0 }
   
   ]]
-  ; last_expr_result = VBool (false); runtime_signal = NoSignal;
+  ; last_expr_result = VVoid; runtime_signal = NoSignal;
   curr_method_type = Void; is_main_scope = true; nested_loops_cnt = 0;
   scope_level = 0; cur_constr_key = None; prev_context = None;
   obj_created_cnt = 2; is_creation = false; constr_affilation = None
@@ -2034,8 +2613,23 @@
      is_not_mutable = false; assignment_count = 0 }
   
   "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Mars");
-     is_not_mutable = false; assignment_count = 0 }
+   { key = "name"; f_type = ClassName ("String");
+     f_value =
+     VObjectRef (RObj ({ class_key = "String";
+                         field_ref_table =
+                         [["value" ->
+                            { key = "value"; f_type = Array (Char);
+                              f_value =
+                              VArray (Arr ({ a_type = Char;
+                                             values =
+                                             [VChar (M); VChar (a); VChar (r);
+                                              VChar (s)];
+                                             length = 4; number = 2 }));
+                              is_not_mutable = true; assignment_count = 0 }
+                         
+  ]]
+  ; number = 1 })); is_not_mutable = false; assignment_count = 0
+  }
   
   ]]
   ; number = 1 })); scope_level = 0
@@ -2055,8 +2649,23 @@
      is_not_mutable = false; assignment_count = 0 }
   
   "name" ->
-   { key = "name"; f_type = String; f_value = VString ("Mars");
-     is_not_mutable = false; assignment_count = 0 }
+   { key = "name"; f_type = ClassName ("String");
+     f_value =
+     VObjectRef (RObj ({ class_key = "String";
+                         field_ref_table =
+                         [["value" ->
+                            { key = "value"; f_type = Array (Char);
+                              f_value =
+                              VArray (Arr ({ a_type = Char;
+                                             values =
+                                             [VChar (M); VChar (a); VChar (r);
+                                              VChar (s)];
+                                             length = 4; number = 2 }));
+                              is_not_mutable = true; assignment_count = 0 }
+                         
+  ]]
+  ; number = 1 })); is_not_mutable = false; assignment_count = 0
+  }
   
   ]]
   ; number = 1 })); runtime_signal = NoSignal; curr_method_type = Void;
@@ -2090,13 +2699,44 @@
      v_value = VInt (8); scope_level = 0 }
   
   "s" ->
-   { v_type = String; v_key = "s"; is_not_mutable = false;
-     assignment_count = 1; v_value = VString ("GGWP"); scope_level = 0 }
+   { v_type = ClassName ("String"); v_key = "s"; is_not_mutable = false;
+     assignment_count = 1;
+     v_value =
+     VObjectRef (RObj ({ class_key = "String";
+                         field_ref_table =
+                         [["value" ->
+                            { key = "value"; f_type = Array (Char);
+                              f_value =
+                              VArray (Arr ({ a_type = Char;
+                                             values =
+                                             [VChar (G); VChar (G); VChar (W);
+                                              VChar (P)];
+                                             length = 4; number = 4 }));
+                              is_not_mutable = true; assignment_count = 0 }
+                         
+  ]]
+  ; number = 3 })); scope_level = 0
+  }
   
   ]]
-  ; last_expr_result = VString ("GGWP"); runtime_signal = NoSignal;
-  curr_method_type = Void; is_main_scope = true; nested_loops_cnt = 0;
-  scope_level = 0; cur_constr_key = None; prev_context = None;
-  obj_created_cnt = 1; is_creation = false; constr_affilation = None
+  ;
+  last_expr_result =
+  VObjectRef (RObj ({ class_key = "String";
+                      field_ref_table =
+                      [["value" ->
+                         { key = "value"; f_type = Array (Char);
+                           f_value =
+                           VArray (Arr ({ a_type = Char;
+                                          values =
+                                          [VChar (G); VChar (G); VChar (W);
+                                           VChar (P)];
+                                          length = 4; number = 4 }));
+                           is_not_mutable = true; assignment_count = 0 }
+                      
+  ]]
+  ; number = 3 })); runtime_signal = NoSignal; curr_method_type = Void;
+  is_main_scope = true; nested_loops_cnt = 0; scope_level = 0;
+  cur_constr_key = None; prev_context = None; obj_created_cnt = 4;
+  is_creation = false; constr_affilation = None
   }
   

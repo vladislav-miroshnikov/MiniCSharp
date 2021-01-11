@@ -132,7 +132,7 @@ module ClassLoader (M : MONADERROR) = struct
 
     let equals : method_r =
       {
-        m_type = Int;
+        m_type = Bool;
         is_abstract = false;
         is_overridable = true;
         has_override_annotation = false;
@@ -143,8 +143,7 @@ module ClassLoader (M : MONADERROR) = struct
           apply Stmt.stat_block
             {| 
           {
-              if (this == obj) return 1;
-              else return 0;
+              return this == obj;
           }
     |};
       }
@@ -152,7 +151,7 @@ module ClassLoader (M : MONADERROR) = struct
 
     let to_string : method_r =
       {
-        m_type = String;
+        m_type = ClassName "String";
         is_abstract = false;
         is_overridable = true;
         has_override_annotation = false;
@@ -172,9 +171,8 @@ module ClassLoader (M : MONADERROR) = struct
       match
         apply class_declaration
           {|public class Object {
-                        public int equals(Object obj) {
-                            if (this == obj) return 1;
-                            else return 0;
+                        public boolean equals(Object obj) {
+                            return this == obj;
                         }
                         
                         public String toString() {
@@ -502,11 +500,76 @@ module ClassLoader (M : MONADERROR) = struct
     monadic_list_iter obj_r.children_keys processing ht
 
   let load cd_list class_table =
-    match cd_list with
+    ( match
+        apply parser
+          {| 
+final class String {
+    public final char[] value;
+
+    public String() {
+        this.value = new char[0];
+    }
+
+    public String(String original) {
+        this.value = original.value;
+    }
+
+    public String(char[] value) {
+        this.value = new char[value.length];
+        for (int i = 0; i < value.length; i++) {
+            this.value[i] = value[i];
+        }
+    }
+
+    public int length() {
+        return value.length;
+    }
+
+    public String concat(String str) {
+        int otherLen = str.length();
+        if (str.length() == 0) {
+            return this;
+        }
+        int len = value.length;
+        char[] newValue = new char[len + otherLen];
+        for (int i = 0; i < len; i++) {
+            newValue[i] = value[i];
+        }
+        for (int j = len; j < len + otherLen; j++) {
+            newValue[j] = str.value[j - len];
+        }
+        return new String(newValue);
+    }
+
+    public boolean startsWith(String prefix, int toffset) {
+        char[] ta = value;
+        char[] pa = prefix.value;
+        int pc = prefix.length();
+        if ((toffset < 0) || (toffset > value.length - pc)) {
+            return false;
+        }
+        for (int i = toffset; i < toffset + pc; i++) {
+            if (ta[i] != pa[i - toffset]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public boolean startsWith(String prefix) {
+        return startsWith(prefix, 0);
+    }
+}
+    |}
+      with
+    | None | Some [] -> error "Syntax error"
+    | Some str_d -> return (cd_list @ str_d) )
+    >>= fun cds_list ->
+    match cds_list with
     | [] -> error "Syntax error or empty file"
     | _ ->
         prepare_object class_table >>= fun table_with_object ->
-        c_table_add cd_list table_with_object
+        c_table_add cds_list table_with_object
         >>= fun table_with_added_classes ->
         add_default_constructors_if_needed table_with_added_classes
         >>= fun with_defaults ->
@@ -600,6 +663,13 @@ module Main (M : MONADERROR) = struct
     | 1 -> return (seq_hd_exn (convert_table_to_seq fht))
     | _ -> error "Must be one main method"
 
+  let rec add_args buf = function
+    | [ x ] -> Printf.bprintf buf "'%c'" x
+    | x :: xs ->
+        Printf.bprintf buf "'%c'," x;
+        add_args buf xs
+    | [] -> ()
+
   let rec expr_type_check t_expr ctx class_table =
     match t_expr with
     | Add (left, right) -> (
@@ -608,13 +678,19 @@ module Main (M : MONADERROR) = struct
         | Int -> (
             expr_type_check right ctx class_table >>= fun rt ->
             match rt with
-            | Int -> return Int
-            | String -> return String
-            | _ -> error "Wrong type: must be Int or String" )
-        | String -> (
+            | Int | Char -> return Int
+            | ClassName "String" -> return (ClassName "String")
+            | _ -> error "Wrong type: must be Int, Char or String" )
+        | Char -> (
             expr_type_check right ctx class_table >>= fun rt ->
             match rt with
-            | Int | String -> return String
+            | Int | Char -> return Int
+            | ClassName "String" -> return (ClassName "String")
+            | _ -> error "Wrong type: must be Int, Char or String" )
+        | ClassName "String" -> (
+            expr_type_check right ctx class_table >>= fun rt ->
+            match rt with
+            | Int | ClassName "String" | Char -> return (ClassName "String")
             | _ -> error "Wrong type: must be Int or String" )
         | _ -> error "Wrong type: must be Int or String" )
     | Sub (left, right)
@@ -666,11 +742,11 @@ module Main (M : MONADERROR) = struct
             match rt with
             | Int -> return Bool
             | _ -> error "Wrong type: must be Int" )
-        | String -> (
+        | Char -> (
             expr_type_check right ctx class_table >>= fun rt ->
             match rt with
-            | String -> return Bool
-            | _ -> error "Wrong type: must be String" )
+            | Char -> return Bool
+            | _ -> error "Wrong type: must be Char" )
         | Bool -> (
             expr_type_check right ctx class_table >>= fun rt ->
             match rt with
@@ -724,6 +800,9 @@ module Main (M : MONADERROR) = struct
             match var_field_o with
             | None -> error "No such field in class!"
             | Some var_field -> return var_field.f_type )
+        | Array _ ->
+            if f_key = "length" then return Int
+            else error "Wrong type: must be object reference"
         | _ -> error "Wrong type: must be object reference" )
     | FieldAccess (obj_expr, CallMethod (Identifier m_ident, args)) -> (
         (* Чекаем то, что перед точкой - это должен быть объект *)
@@ -803,7 +882,8 @@ module Main (M : MONADERROR) = struct
         match value with
         | VBool _ -> return Bool
         | VInt _ -> return Int
-        | VString _ -> return String
+        | VChar _ -> return Char
+        | VString _ -> return (ClassName "String")
         | VObjectRef RNull -> return (ClassName "null")
         | VObjectRef (RObj { class_key = ck; _ }) -> return (ClassName ck)
         | VArray ANull -> return (Array Void)
@@ -1212,7 +1292,7 @@ module Main (M : MONADERROR) = struct
           | [] -> return vctx
           | (Name name, var_expr_o) :: vs -> (
               match vctx.cur_object with
-              | RNull -> error "Must be non-null object!"
+              | RNull -> error "NullPointerException"
               | RObj { field_ref_table = frt; _ } ->
                   ( if
                     (* Смотрим, чтобы подобного имени не было ни среди локальных переменных, ни среди полей класса *)
@@ -1283,15 +1363,39 @@ module Main (M : MONADERROR) = struct
 
   and eval_expr expr ectx class_table =
     let eval_e e_expr ctx =
-      let eval_op left right op =
+      let eval_op left right op adding =
         eval_expr left ctx class_table >>= fun lctx ->
         eval_expr right lctx class_table >>= fun rctx ->
         let l_value = lctx.last_expr_result in
         let r_value = rctx.last_expr_result in
-        let new_value = op l_value r_value in
-        try return { rctx with last_expr_result = new_value } with
-        | Invalid_argument m -> error m
-        | Division_by_zero -> error "Division by zero!"
+        match (l_value, r_value) with
+        | ( VObjectRef (RObj { class_key = "String"; _ }),
+            VObjectRef (RObj { class_key = "String"; _ }) )
+          when adding ->
+            eval_expr
+              (FieldAccess (left, CallMethod (Identifier "concat", [ right ])))
+              rctx class_table
+        | VObjectRef (RObj { class_key = "String"; _ }), v2 when adding ->
+            eval_expr
+              (FieldAccess
+                 ( left,
+                   CallMethod (Identifier "concat", [ Const (val_to_str v2) ])
+                 ))
+              rctx class_table
+        | v1, VObjectRef (RObj { class_key = "String"; _ }) when adding ->
+            eval_expr
+              (FieldAccess
+                 ( Const (val_to_str v1),
+                   CallMethod (Identifier "concat", [ right ]) ))
+              rctx class_table
+        | v1, v2 -> (
+            try
+              let new_val = op v1 v2 in
+              return { rctx with last_expr_result = new_val }
+            with
+            | Invalid_argument m -> error m
+            | Division_by_zero -> error "ArithmeticException: division by zero"
+            )
       in
       let eval_un v_expr op =
         eval_expr v_expr ctx class_table >>= fun vctx ->
@@ -1301,18 +1405,18 @@ module Main (M : MONADERROR) = struct
         with Invalid_argument m -> error m
       in
       match e_expr with
-      | Add (left, right) -> eval_op left right ( ++ )
-      | Sub (left, right) -> eval_op left right ( -- )
-      | Mult (left, right) -> eval_op left right ( ** )
-      | Div (left, right) -> eval_op left right ( // )
-      | Mod (left, right) -> eval_op left right ( %% )
-      | And (left, right) -> eval_op left right ( &&& )
-      | Or (left, right) -> eval_op left right ( ||| )
+      | Add (left, right) -> eval_op left right ( ++ ) true
+      | Sub (left, right) -> eval_op left right ( -- ) false
+      | Mult (left, right) -> eval_op left right ( ** ) false
+      | Div (left, right) -> eval_op left right ( // ) false
+      | Mod (left, right) -> eval_op left right ( %% ) false
+      | And (left, right) -> eval_op left right ( &&& ) false
+      | Or (left, right) -> eval_op left right ( ||| ) false
       | Not bexp -> eval_un bexp not_v
-      | Less (left, right) -> eval_op left right ( <<< )
-      | More (left, right) -> eval_op left right ( >>> )
-      | LessOrEqual (left, right) -> eval_op left right ( <<== )
-      | MoreOrEqual (left, right) -> eval_op left right ( >>== )
+      | Less (left, right) -> eval_op left right ( <<< ) false
+      | More (left, right) -> eval_op left right ( >>> ) false
+      | LessOrEqual (left, right) -> eval_op left right ( <<== ) false
+      | MoreOrEqual (left, right) -> eval_op left right ( >>== ) false
       | Equal (left, right) -> (
           expr_type_check left ctx class_table >>= fun l_type ->
           match l_type with
@@ -1326,10 +1430,20 @@ module Main (M : MONADERROR) = struct
                   (FieldAccess
                      (left, CallMethod (Identifier "equals", [ right ])))
                   ctx class_table
-              else eval_op left right ( === )
-          | _ -> eval_op left right ( === ) )
-      | NotEqual (left, right) -> eval_op left right ( !=! )
-      | Const v -> return { ctx with last_expr_result = v }
+              else eval_op left right ( === ) false
+          | _ -> eval_op left right ( === ) false )
+      | NotEqual (left, right) -> eval_op left right ( !=! ) false
+      | Const v -> (
+          match v with
+          | VString str -> (
+              let buf = Buffer.create 1000 in
+              Buffer.add_string buf "new String(new char[]{";
+              add_args buf (Opal.explode str);
+              Buffer.add_string buf "})";
+              match apply Expr.expression (Buffer.contents buf) with
+              | None -> error "Syntax error"
+              | Some str_expr -> eval_expr str_expr ctx class_table )
+          | _ -> return { ctx with last_expr_result = v } )
       | Identifier id -> (
           (* Пытаемся найти среди переменных в таблице контекста *)
           match get_elem_if_present ctx.var_table id with
@@ -1438,7 +1552,10 @@ module Main (M : MONADERROR) = struct
           | VObjectRef (RObj { field_ref_table = frt; _ }) ->
               get_elem_if_present_m frt f_key >>= fun fld ->
               return { octx with last_expr_result = fld.f_value }
-          | _ -> error "Must be non-null object!" )
+          | VArray (Arr { length = alen; _ }) when f_key = "length" ->
+              return { octx with last_expr_result = VInt alen }
+          | VObjectRef RNull | VArray ANull -> error "NullPointerException"
+          | _ -> error "Must be non-null object or array with length call!" )
       | FieldAccess (obj_expr, CallMethod (Identifier m_name, args)) -> (
           eval_expr obj_expr ctx class_table >>= fun octx ->
           let obj = octx.last_expr_result in
@@ -1499,7 +1616,9 @@ module Main (M : MONADERROR) = struct
                   return
                     {
                       new_ctx with
-                      last_expr_result = m_res_ctx.last_expr_result;
+                      last_expr_result =
+                        ( if mr.m_type = Void then VVoid
+                        else m_res_ctx.last_expr_result );
                       obj_created_cnt = m_res_ctx.obj_created_cnt;
                       is_creation = false;
                     } )
@@ -1540,6 +1659,7 @@ module Main (M : MONADERROR) = struct
                            a_type = arr_type;
                            values = make_list_of_elem init_v size;
                            number = szctx.obj_created_cnt + 1;
+                           length = size;
                          });
                   obj_created_cnt = szctx.obj_created_cnt + 1;
                 }
@@ -1560,7 +1680,13 @@ module Main (M : MONADERROR) = struct
               ctx with
               last_expr_result =
                 VArray
-                  (Arr { a_type; values; number = r_ctx.obj_created_cnt + 1 });
+                  (Arr
+                     {
+                       a_type;
+                       values;
+                       number = r_ctx.obj_created_cnt + 1;
+                       length = List.length values;
+                     });
               obj_created_cnt = r_ctx.obj_created_cnt + 1;
             }
       | ClassCreate (Name class_name, c_args) ->
@@ -1737,9 +1863,44 @@ module Main (M : MONADERROR) = struct
               | VInt i -> (
                   let new_val = val_evaled_ctx.last_expr_result in
                   try
-                    update_array_state_exn arr i new_val index_evaled_ctx
-                    |> fun _ ->
-                    return { index_evaled_ctx with last_expr_result = new_val }
+                    if index_evaled_ctx.is_creation then (
+                      let arr_n =
+                        get_arr_info_exn arr |> fun (_, _, _, n) -> n
+                      in
+                      let cur_frt =
+                        get_obj_fields_exn index_evaled_ctx.cur_object
+                      in
+                      Hashtbl.iter
+                        (fun k v ->
+                          match v.v_value with
+                          | VArray (Arr { number = n; _ }) when n = arr_n ->
+                              Hashtbl.replace index_evaled_ctx.var_table k
+                                {
+                                  v with
+                                  v_value =
+                                    update_array_val_exn v.v_value i new_val;
+                                }
+                          | _ -> ())
+                        index_evaled_ctx.var_table;
+                      Hashtbl.iter
+                        (fun k f ->
+                          match f.f_value with
+                          | VArray (Arr { number = n; _ }) when n = arr_n ->
+                              Hashtbl.replace cur_frt k
+                                {
+                                  f with
+                                  f_value =
+                                    update_array_val_exn f.f_value i new_val;
+                                }
+                          | _ -> ())
+                        cur_frt;
+                      return
+                        { index_evaled_ctx with last_expr_result = new_val } )
+                    else
+                      update_array_state_exn arr i new_val index_evaled_ctx
+                      |> fun _ ->
+                      return
+                        { index_evaled_ctx with last_expr_result = new_val }
                   with Invalid_argument m | Failure m -> error m )
               | _ -> error "Wrong type for array index!" )
           | _ -> error "Wrong type for array asssignment!" )
@@ -1836,6 +1997,10 @@ module Main (M : MONADERROR) = struct
 
   and update_field_v obj_expr f_name val_evaled_ctx class_table =
     eval_expr obj_expr val_evaled_ctx class_table >>= fun obj_evaled_ctx ->
+    ( match obj_evaled_ctx.last_expr_result with
+    | VObjectRef _ -> return ()
+    | _ -> error "Wrong object value" )
+    >>= fun _ ->
     let obj_r = get_obj_value obj_evaled_ctx.last_expr_result in
     let new_val = val_evaled_ctx.last_expr_result in
     try
@@ -1866,8 +2031,13 @@ module Main (M : MONADERROR) = struct
               (* Если массив - смотрим, если номер совпал - обновляем элемент по индексу.
                  + смотрим, если у нас массив объектов - то надо по нему тоже пробежаться, у каждого объекта сделать рекурсивный запуск обхода *)
               | VArray
-                  (Arr { a_type = at; values = cur_values; number = cur_num })
-                -> (
+                  (Arr
+                    {
+                      a_type = at;
+                      values = cur_values;
+                      number = cur_num;
+                      length = cur_len;
+                    }) -> (
                   if cur_num = a_n then
                     (* Надо в текущей таблице заменить массив на новый (заменить поле) *)
                     Hashtbl.replace f_ht f_key
@@ -1881,6 +2051,7 @@ module Main (M : MONADERROR) = struct
                                     a_type = at;
                                     values = cur_values;
                                     number = cur_num;
+                                    length = cur_len;
                                   }))
                             i n_val;
                       };
@@ -1907,8 +2078,14 @@ module Main (M : MONADERROR) = struct
           match var.v_value with
           | VObjectRef (RObj { field_ref_table = frt; _ }) ->
               update_states frt i n_val a_n
-          | VArray (Arr { a_type = at; values = cur_values; number = cur_num })
-            -> (
+          | VArray
+              (Arr
+                {
+                  a_type = at;
+                  values = cur_values;
+                  number = cur_num;
+                  length = cur_len;
+                }) -> (
               if cur_num = a_n then
                 (* Надо в текущей таблице заменить массив на новый (заменить значение переменной) *)
                 Hashtbl.replace u_ctx.var_table v_key
@@ -1922,6 +2099,7 @@ module Main (M : MONADERROR) = struct
                                 a_type = at;
                                 values = cur_values;
                                 number = cur_num;
+                                length = cur_len;
                               }))
                         i n_val;
                   }
@@ -1943,7 +2121,7 @@ module Main (M : MONADERROR) = struct
       | None -> ()
       | Some prev_ctx -> helper_update i n_val prev_ctx a_n
     in
-    get_arr_info_exn arr |> fun (_, _, a_number) ->
+    get_arr_info_exn arr |> fun (_, _, _, a_number) ->
     helper_update index new_value update_ctx a_number
 
   and update_object_state_exn obj field_key new_value update_ctx =
