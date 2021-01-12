@@ -38,7 +38,6 @@
  (libraries CsharpExcep.Lib)
  (preprocess
   (pps ppx_expect ppx_deriving.show ppx_deriving.eq)))
-<<<<<<< HEAD
 
 (executable
  (name demoRenameTransformation)
@@ -46,5 +45,3 @@
  (libraries CsharpExcep.Lib)
  (preprocess
   (pps ppx_expect ppx_deriving.show ppx_deriving.eq)))
-=======
->>>>>>> fb62aa635f89cf8499a60dc63bbf4ef85344bbb8

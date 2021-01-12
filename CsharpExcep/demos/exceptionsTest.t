@@ -232,7 +232,6 @@
   
   -_-_-_-_-_-_-_-_-_-_- Test 3  -_-_-_-_-_-_-_-_-_-_-
   
-  A21.finally
   filter B21
   B21 Exception
   B21.finally
@@ -247,7 +246,7 @@
     ; current_meth_type = Void; last_expr_result = VVoid;
     runtime_flag = NoFlag; is_main = true; curr_constructor = None;
     count_of_nested_cycle = 0; visibility_level = 0; prev_ctx = None;
-    count_of_obj = 2; is_creation = false }
+    count_of_obj = 1; is_creation = false }
   
  
  
